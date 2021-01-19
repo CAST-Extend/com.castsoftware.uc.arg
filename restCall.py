@@ -4,6 +4,7 @@ from time import perf_counter, ctime
 import pandas as pd
 import logging
 import enum
+from copy import copy
 
 class RestCall:
 
@@ -55,12 +56,12 @@ class RestCall:
 class AipRestCall(RestCall):
     _measures = {
         '60017':'TQI',
-        '60012':'Changeability',
-        '60014':'Efficiency',
         '60013':'Robustness',
+        '60014':'Efficiency',
         '60016':'Security',
         '60011':'Transferability',
-        '60015':'SEI Maintainability',
+        '60012':'Changeability',
+        '60015':'SEI Maintainability'
     }
 
     def getDomain(self,schema_name):
@@ -107,6 +108,29 @@ class AipRestCall(RestCall):
             first_tech=False
         return grade
 
+    def getSizingByTechnolgy(self,domain_id,snapshot,sizing):
+        first_tech=True
+        size_df = pd.DataFrame(columns=list(sizing.values()))
+        for tech in snapshot['technology']:
+            t={}
+            a={}
+            for key in sizing: 
+                url = f'{domain_id}/applications/3/results?sizing-measures={key}&technologies={tech}'
+                (status,json) = self.get(url)
+                if status == requests.codes.ok and len(json) > 0:
+                    try:
+                        t[sizing[key]]= json[0]['applicationResults'][0]['technologyResults'][0]['result']['value']
+                        if first_tech==True:
+                            a[sizing[key]]=json[0]['applicationResults'][0]['result']['value']
+                    except IndexError:
+                        self._logger.debug(f'{domain_id} no grade available for {key} {tech}')
+            if first_tech==True:
+                size_df.loc['All'] = a
+            size_df.loc[tech] = t
+            first_tech=False
+        return size_df
+
+
     def getLOC(self,domain_id):
         loc = 0
         (status,json) = self.get(f'{domain_id}/applications/3/results?sizing-measures=10151&snapshots=-1')
@@ -131,6 +155,7 @@ class AipData():
        '10107':'Number of Comment Lines', 
        '10109':'Number of Commented-out Code Lines' 
     }
+    _health_grade_ids = ['Efficiency','Robustness','Security','Changeability','Transferability']
 
     def __init__(self, rest, project, schema):
         self._base=schema
@@ -142,6 +167,7 @@ class AipData():
                 self._data[s]['domain_id']=domain_id
                 self._data[s]['snapshot']=rest.getLatestSnapshot(domain_id)
                 self._data[s]['grades']=rest.getGradesByTechnolgy(domain_id,self._data[s]['snapshot'])
+                self._data[s]['sizing']=rest.getSizingByTechnolgy(domain_id,self._data[s]['snapshot'],self._sizing)
                 self._data[s]['loc_sizing']=rest.getSizing(domain_id,self._sizing) 
 
     def data(self,app):
@@ -156,13 +182,41 @@ class AipData():
     def grades(self, app):
         return self.data(app)['grades']
 
+    def sizing(self, app):
+        return self.data(app)['sizing']
+
     def get_app_grades(self, app, sort=False):
         app_grades = self.grades(app).loc['All']
         if sort:
             return app_grades
         else:
-            return app_grades.sort_values() 
-    
+            return app_grades.sort_values()
+
+    def calc_grades_all_apps(self):
+        all_app=pd.DataFrame()
+        for row in self._data:
+            app_name=self.snapshot(row)['name']
+            grades=self.grades(row)
+            all_app = pd.concat([all_app,grades[grades.index.isin(['All'])].rename(index={'All': app_name})]).drop_duplicates()
+        return all_app[all_app.columns].mean(axis=0)
+
+    def calc_grades_health(self,grade_all):
+        grade_df = pd.DataFrame(grade_all)
+        grade_health=grade_df[grade_df.index.isin(self._health_grade_ids)]
+        return grade_health
+
+    def calc_health_grades_high_risk(self,grade_all):
+        grade_health = self.calc_grades_health(grade_all)
+        grade_at_risk=grade_health[grade_health < 2.5].dropna()
+        return grade_at_risk
+
+    def calc_health_grades_medium_risk(self,grade_all):
+        grade_health = self.calc_grades_health(grade_all)
+        grade_at_risk=grade_health[grade_health > 2.5].dropna()
+        grade_at_risk=grade_health[grade_health < 3].dropna()
+        return grade_at_risk
+
+
     def get_loc_sizing(self,app):
         return self.data(app)['loc_sizing']
 
@@ -181,16 +235,58 @@ class AipData():
                 rslt = rslt + ", "
         return rslt
 
+    def get_grade_by_tech(self,app):
+        grade_df = self.grades(app).round(2).applymap('{:,.2f}'.format)
+        grade_df = grade_df[grade_df.index.isin(['All'])==False]
+
+        sizing_df = pd.DataFrame(self.sizing(app))
+        sizing_df = sizing_df[sizing_df.index.isin(['All'])==False]
+        sizing_df = pd.DataFrame(sizing_df["Number of Code Lines"].rename("LOC")).dropna()
+        sizing_df = sizing_df.applymap('{:,.0f}'.format)
+        
+        tech = sizing_df.join(grade_df) 
+        return tech
+
+    def get_high_risk_grade_text(self, grades):
+        grade_at_risk=self.calc_health_grades_high_risk(grades)
+        if grade_at_risk.empty:
+            return None
+        else:
+            return self.text_from_list(grade_at_risk.index.values.tolist())
+
+    def get_medium_risk_grade_text(self, grades):
+        grade_at_risk=self.calc_health_grades_medium_risk(grades)
+        if grade_at_risk.empty:
+            return None
+        else:
+            return self.text_from_list(grade_at_risk.index.values.tolist())
+
+    def text_from_list(self,list):
+        rslt = ""
+        total_items = len(list)
+        if total_items == 1:
+            return list[0]
+
+        last_item = list[-1]
+        sec_last_item = list[-2]
+        for name in list:
+            rslt = rslt + name
+            if total_items >= 2 and name == sec_last_item:
+                rslt = rslt + " and "
+            elif name != last_item:
+                rslt = rslt + ", "
+        return rslt
 
 
 
-aip_rest = AipRestCall("http://sha-dd-console:8080/CAST-RESTAPI-integrated/rest/","cast","cast",True)
+"""
 apps = ["actionplatform","intersect"] 
 aip_data = AipData(aip_rest,"Florence", apps)
-print (aip_data.get_all_app_text())
 
-print (aip_data.data(apps[0])['snapshot'])
-
+app_id = apps[0]
+grade_all = aip_data.get_app_grades(app_id)
+text = aip_data.get_grade_at_risk_text(grade_all)
+"""
 
 
 
