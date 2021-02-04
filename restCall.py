@@ -1,9 +1,12 @@
+from pandas.core.frame import DataFrame
 import requests
-from requests.auth import HTTPBasicAuth 
-from time import perf_counter, ctime
 import pandas as pd
 import logging
 import enum
+import urllib.parse
+
+from requests.auth import HTTPBasicAuth 
+from time import perf_counter, ctime
 from copy import copy
 
 class RestCall:
@@ -52,6 +55,8 @@ class RestCall:
 
         return resp.status_code,resp.json()
 
+#class HLRestCall(RestCall):
+
 
 class AipRestCall(RestCall):
     _measures = {
@@ -64,7 +69,13 @@ class AipRestCall(RestCall):
         '60015':'SEI Maintainability'
     }
 
-    def getDomain(self,schema_name):
+    _violations = {
+        '67011':'Violation Count',
+        '67012':' per file',
+        '67013':' per kLoC'
+    }
+
+    def get_domain(self,schema_name):
         domain_id = None
         (status,json) = self.get()
         if status == requests.codes.ok:
@@ -75,18 +86,18 @@ class AipRestCall(RestCall):
                 
         return domain_id
 
-    def getLatestSnapshot(self,domain_id):
+    def get_latest_snapshot(self,domain_id):
         snapshot = {}
         (status,json) = self.get(f'{domain_id}/applications/3/snapshots')
         if status == requests.codes.ok and len(json) > 0:
-            snapshot['id'] = json[0]['number']
+            snapshot['id'] = json[0]['href'].split('/')[-1]  
             snapshot['name'] = json[0]['name']
             snapshot['technology'] = json[0]['technologies']
             snapshot['module_href'] = json[0]['moduleSnapshots']['href']
             snapshot['result_href'] = json[0]['results']['href'] 
         return snapshot 
 
-    def getGradesByTechnolgy(self,domain_id,snapshot):
+    def get_grades_by_technology(self,domain_id,snapshot):
         first_tech=True
         grade = pd.DataFrame(columns=list(self._measures.values()))
         for tech in snapshot['technology']:
@@ -98,17 +109,21 @@ class AipRestCall(RestCall):
                 if status == requests.codes.ok and len(json) > 0:
                     try:
                         t[self._measures[key]]=json[0]['applicationResults'][0]['technologyResults'][0]['result']['grade']
-                        if first_tech==True:
-                            a[self._measures[key]]=json[0]['applicationResults'][0]['result']['grade']
                     except IndexError:
-                        self._logger.debug(f'{domain_id} no grade available for {key} {tech}')
+                        self._logger.warning(f'{domain_id} no grade available for {key} {tech} setting it to 4')
+                        t[self._measures[key]]=4
+
+                    if first_tech==True:
+                        a[self._measures[key]]=json[0]['applicationResults'][0]['result']['grade']
+                else:
+                    self._logger.error (f'Error retrieving technology information:  {url}')
             if first_tech==True:
                 grade.loc['All'] = a
             grade.loc[tech] = t
             first_tech=False
         return grade
 
-    def getSizingByTechnolgy(self,domain_id,snapshot,sizing):
+    def get_sizing_by_technology(self,domain_id,snapshot,sizing):
         first_tech=True
         size_df = pd.DataFrame(columns=list(sizing.values()))
         for tech in snapshot['technology']:
@@ -130,6 +145,89 @@ class AipRestCall(RestCall):
             first_tech=False
         return size_df
 
+    def get_distribution_sizing(self, domain_id, metric_id):
+        rslt = DataFrame(columns=['name','value'])
+        (status,json) = self.get(f'{domain_id}/applications/3/results?metrics={metric_id}&select=categories')
+        if status == requests.codes.ok and len(json) > 0:
+            cat = json[0]['applicationResults'][0]['result']['categories']
+            for index, name in enumerate(cat):
+                rslt.loc[name['key']]=[[name['name']],[name['value']]]
+
+        return rslt
+
+    def get_rules(self,domain_id,snapshot_id,business_criteria,critical=True,non_critical=True,start_row=1,max_rows=10000):
+        rslt_df =  pd.DataFrame()
+        critical_arg=non_critical_arg=''
+
+        if critical:
+           critical_arg=f'cc:{business_criteria}' 
+        if non_critical:
+           non_critical_arg=f'nc:{business_criteria}' 
+
+        rule_arg=critical_arg
+        if len(rule_arg) > 0:
+            rule_arg = rule_arg + ','
+        rule_arg=f'{rule_arg}{non_critical_arg}'
+
+        url = f'{domain_id}/applications/3/snapshots/{snapshot_id}/violations?rule-pattern={rule_arg}&startRow={start_row}&nbRows={max_rows}'
+        (status,json) = self.get(url)
+        if status == requests.codes.ok and len(json) > 0:
+            rslt_df = pd.DataFrame(json)
+        return rslt_df
+
+    def get_action_plan(self,domain_id,snapshot_id):
+        catagory = ''
+        catagory2 = ''
+        rslt_df =  pd.DataFrame()
+        ap_summary_df =  pd.DataFrame()
+        url = f'{domain_id}/applications/3/snapshots/{snapshot_id}/action-plan/issues?startRow=1&nbRows=100000'
+        (status,json) = self.get(url)
+        if status == requests.codes.ok and len(json) > 0:
+            rslt_df = pd.DataFrame(json)
+            rule_pattern = pd.json_normalize(rslt_df['rulePattern']).add_prefix('rule.')
+            rule_pattern['rule.href'] = rule_pattern['rule.href'].str.split('/').str[-1]
+            rule_pattern = rule_pattern.rename(columns={"rule.href":"rule.id"})
+
+            component = pd.json_normalize(rslt_df['component']).add_prefix('component.') 
+            component.drop(component.columns.difference(['component.name','component.shortName']),1,inplace=True)
+
+            remediation = pd.json_normalize(rslt_df['remedialAction']) 
+            rslt_df = rule_pattern.join([component,remediation])                                                  
+
+            rslt_df.insert(3,'rule.business','')
+            rslt_df.insert(3,'rule.parent','')
+
+            save_rule_id = ''
+            for key, value in rslt_df.iterrows():
+                rule_id=value['rule.id']
+                if save_rule_id != rule_id:
+                    save_rule_id = rule_id
+                    url = f'{domain_id}/quality-indicators/{rule_id}/snapshots/{snapshot_id}'
+                    (status,json) = self.get(url)
+                    if status == requests.codes.ok and len(json) > 0:
+                        catagory = ''
+                        catagory2 = ''
+                        for g1 in json['gradeAggregators']:
+                            catagory2 = g1['name']
+                            for g2 in g1['gradeAggregators']:
+                                if g2['name'] != 'Total Quality Index':
+                                    catagory = catagory + g2['name'] + ', '
+                
+                rslt_df.loc[key,'rule.parent']=catagory2
+                rslt_df.loc[key,'rule.business']=catagory[:-2]
+
+            rslt_df = rslt_df.sort_values(by=['rule.id'])
+            ap_summary_df = rslt_df.groupby(['rule.name']).count()
+            business = pd.DataFrame(rslt_df,columns=['rule.name','rule.parent','rule.business','tag','comment']).drop_duplicates()
+            ap_summary_df.drop(ap_summary_df.columns.difference(['rule.name','component.name']),1,inplace=True)
+            ap_summary_df = pd.merge(ap_summary_df,business, on='rule.name')
+            ap_summary_df = ap_summary_df[['rule.name','rule.business','component.name','tag','comment','rule.parent']]
+            ap_summary_df = ap_summary_df.rename(columns={'component.name':'No. of Actions',
+                                                          'rule.name':'Quality Rule',
+                                                          'rule.business':'Business Criteria'
+                                                          })
+
+        return (rslt_df, ap_summary_df)
 
     def getLOC(self,domain_id):
         loc = 0
@@ -138,7 +236,7 @@ class AipRestCall(RestCall):
             loc = json[0]['applicationResults'][0]['result']['value']
         return loc
 
-    def getSizing(self, domain_id, input):
+    def get_sizing(self, domain_id, input):
         rslt = {}
         for key in input: 
             (status,json) = self.get(f'{domain_id}/applications/3/results?sizing-measures={key}&snapshots=-1')
@@ -146,29 +244,58 @@ class AipRestCall(RestCall):
                 rslt[input[key]]=json[0]['applicationResults'][0]['result']['value']
         return rslt
 
+    def get_violation_CR(self,domain_id):
+        vs = self.get_sizing(domain_id,self._violations) 
+        complexity = self.get_distribution_sizing(domain_id,'67001')
+        vs['Complex objects']=complexity.loc['67002']['value'][0]+complexity.loc['67003']['value'][0]
+        complexity = self.get_distribution_sizing(domain_id,'67030')
+        vs[' With violations']=complexity.loc['67031']['value'][0]+complexity.loc['67032']['value'][0]
+        return vs
+
 
 class AipData():
     _data={}
     _base=[]
+    _rest=None
+
     _sizing = {
        '10151':'Number of Code Lines', 
        '10107':'Number of Comment Lines', 
-       '10109':'Number of Commented-out Code Lines' 
+       '10109':'Number of Commented-out Code Lines',
+       '67011':'Critical Violations'
     }
+
+    _tech_sizing = {
+        '10151':'LoC',
+        '10154':'Files',
+        '10155':'Classes',
+        '10158':'SQL Artifacts',
+        '10163':'Tables'
+    }
+
     _health_grade_ids = ['Efficiency','Robustness','Security','Changeability','Transferability']
 
     def __init__(self, rest, project, schema):
+        self._rest=rest
         self._base=schema
         for s in schema:
+            print (f'Collecting data for {s}')
             self._data[s]={}
             central_schema = f'{s}_central'
-            domain_id = rest.getDomain(central_schema)
+            domain_id = rest.get_domain(central_schema)
             if domain_id is not None:
                 self._data[s]['domain_id']=domain_id
-                self._data[s]['snapshot']=rest.getLatestSnapshot(domain_id)
-                self._data[s]['grades']=rest.getGradesByTechnolgy(domain_id,self._data[s]['snapshot'])
-                self._data[s]['sizing']=rest.getSizingByTechnolgy(domain_id,self._data[s]['snapshot'],self._sizing)
-                self._data[s]['loc_sizing']=rest.getSizing(domain_id,self._sizing) 
+                self._data[s]['snapshot']=rest.get_latest_snapshot(domain_id)
+                self._data[s]['grades']=rest.get_grades_by_technology(domain_id,self._data[s]['snapshot'])
+                self._data[s]['sizing']=rest.get_sizing_by_technology(domain_id,self._data[s]['snapshot'],self._sizing)
+                self._data[s]['loc_sizing']=rest.get_sizing(domain_id,self._sizing) 
+                self._data[s]['tech_sizing']=rest.get_sizing(domain_id,self._tech_sizing) 
+                self._data[s]['violation_sizing']=rest.get_violation_CR(domain_id)
+                self._data[s]['critical_rules']=rest.get_rules(domain_id,self._data[s]['snapshot']['id'],60017,non_critical=False)
+
+                (ap_df,ap_summary_df) = rest.get_action_plan(domain_id,self._data[s]['snapshot']['id']) 
+                self._data[s]['action_plan']=ap_df
+                self._data[s]['action_plan_summary']=ap_summary_df
 
     def data(self,app):
         return self._data[app]
@@ -185,6 +312,14 @@ class AipData():
     def sizing(self, app):
         return self.data(app)['sizing']
 
+    def critical_rules(self, app):
+        return self.data(app)['critical_rules']
+
+    def action_plan(self, app):
+        ap_df = self.data(app)['action_plan']
+        ap_summary_df = self.data(app)['action_plan_summary']
+        return (ap_df,ap_summary_df)
+        
     def get_app_grades(self, app, sort=False):
         app_grades = self.grades(app).loc['All']
         if sort:
@@ -216,17 +351,24 @@ class AipData():
         grade_at_risk=grade_health[grade_health < 3].dropna()
         return grade_at_risk
 
-
     def get_loc_sizing(self,app):
         return self.data(app)['loc_sizing']
+
+    def tech_sizing(self, app):
+        return self.data(app)['tech_sizing']
+
+    def violation_sizing(self, app):
+        return self.data(app)['violation_sizing']
 
     def get_all_app_text(self):
         rslt = ""
 
         data = self._data
         l = len(self._base)
-        last_name = self._base[-2]
+        if l == 1:
+            return self.snapshot(self._base[0])['name']
 
+        last_name = self._base[-2]
         for a in self._base:
             rslt = rslt + self.snapshot(a)['name']
             if l >= 2 and a == last_name:
@@ -245,6 +387,13 @@ class AipData():
         sizing_df = sizing_df.applymap('{:,.0f}'.format)
         
         tech = sizing_df.join(grade_df) 
+
+        sizing_df = pd.DataFrame(self.sizing(app)) 
+        sizing_df = sizing_df[sizing_df.index.isin(['All'])==False]
+        sizing_df = pd.DataFrame(sizing_df["Critical Violations"]).dropna()
+        sizing_df = sizing_df.applymap('{:,.0f}'.format)
+        tech = tech.join(sizing_df)
+
         return tech
 
     def get_high_risk_grade_text(self, grades):
