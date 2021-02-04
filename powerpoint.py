@@ -2,6 +2,10 @@ from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.parts.chart import ChartPart
 from pptx.parts.embeddedpackage import EmbeddedXlsxPart
+from pptx.dml.color import ColorFormat, RGBColor
+from pptx.enum.dml import MSO_THEME_COLOR
+
+import util
 
 from copy import deepcopy
 import six
@@ -97,8 +101,31 @@ class PowerPoint:
                                 g = g[:g.find("}")]
                                 if g:
                                     grade=grades[g]
-                                    cur_text = cur_text.replace(f'{search_str}{g}}}',str(round(grade,2)))
+                                    grade_str = str(round(grade,2))
+                                    if len(grade_str) < 4:
+                                        grade_str = grade_str + '0'
+                                    cur_text = cur_text.replace(f'{search_str}{g}}}',grade_str)
                                     run.text = cur_text
+
+                                    if cur_text == grade_str:
+                                        color = self.get_grade_color(grade)
+                                        run.font.color.rgb = color
+                                        shape.line.width=0
+                                        box_name = f'{search_str[1:]}{g}'
+                                        box = self.get_shape_by_name(box_name,slide)
+                                        if box != None:
+                                            box.line.color.rgb = color
+
+    def get_grade_color(self,grade):
+        rgb = 0
+        if grade > 3:
+            rgb = RGBColor(0,128,0) # green
+        elif grade <3 and grade > 2:
+            rgb = RGBColor(0,255,0) # yellow
+        else:
+            rgb = RGBColor(255,0,0) # red
+        return rgb
+
 
     def replace_text (self, search_str, repl_str):
         for slide in self._prs.slides:
@@ -129,9 +156,14 @@ class PowerPoint:
             run = paragraph.runs[0]
             run.text = cur_text.replace(str(search_str), str(repl_str))
 
-    def get_shape_by_name(self, name):
+    def get_shape_by_name(self, name, use_slide=None):
         rslt = None
-        for slide in self._prs.slides:
+
+        slides = self._prs.slides
+        if use_slide != None:
+            slides = [use_slide] 
+
+        for slide in slides:
             for shape in slide.shapes:
                 if shape.name == name:
                     rslt = shape
@@ -167,28 +199,66 @@ class PowerPoint:
                 chart_data.add_series('Series 1', data)
                 shape.chart.replace_data(chart_data)
 
-    def update_table(self, name, df):
+
+    def update_table(self, name, df, include_index=True):
         table_shape = self.get_shape_by_name(name)
         if table_shape != None and table_shape.has_table:
             table=table_shape.table
-            row_end = len(table.rows)
-            col_end = len(table.columns)
-            df_max_rows = len(df.count(axis=1))
-            df_max_cols = len(df.count(axis=0))
 
-            for row in range(1,row_end):
-                if row <= df_max_rows:
-                    data = df.head().index[row-1]
-                    cell = table.cell(row,0)
-                    run = self.merge_runs(cell.text_frame.paragraphs[0]) 
-                    run.text = run.text.replace(run.text,data)
-                    for col in range(1,col_end):
-                        if col <= df_max_cols:
-                            data = str(df.iloc[row-1][col-1])
-                            cell = table.cell(row,col)
-                            run = self.merge_runs(cell.text_frame.paragraphs[0]) 
-                            run.text = run.text.replace(run.text,data)
-    
+            colnames = list(df.columns)
+
+            # Insert the row zero names
+            if include_index:
+                for col_index, col_name in enumerate(df.index):
+                    cell = table.cell(col_index+1,0)
+                    text = str(col_name)
+                    run = self.merge_runs(cell.text_frame.paragraphs[0])
+                    run.text = text
+
+            rows, cols = df.shape
+            m = df.values
+            for row in range(rows):
+                for col in range(cols):
+                    val = m[row, col]
+                    text = str(val)
+                    
+                    if include_index:
+                        tbl_col=col+1
+                    else:
+                        tbl_col=col
+
+                    cell = table.cell(row+1,tbl_col)
+                    run = self.merge_runs(cell.text_frame.paragraphs[0])
+                    run.text = text
+
+    # def update_table(self, name, df):
+    #     table_shape = self.get_shape_by_name(name)
+    #     if table_shape != None and table_shape.has_table:
+    #         table=table_shape.table
+    #         row_end = len(table.rows)
+    #         col_end = len(table.columns)
+    #         df_max_rows = len(df.count(axis=1))
+    #         df_max_cols = len(df.count(axis=0))
+
+    #         row=col=0
+    #         for row in range(1,row_end):
+    #             try:
+    #                 if row <= df_max_rows:
+    #                     head = df.head()
+    #                     data = head.index[row-1]
+    #                     cell = table.cell(row,0)
+    #                     run = self.merge_runs(cell.text_frame.paragraphs[0]) 
+    #                     run.text = run.text.replace(run.text,data)
+    #                     for col in range(1,col_end):
+    #                         if col <= df_max_cols:
+    #                             data = str(df.iloc[row-1][col-1])
+    #                             cell = table.cell(row,col)
+    #                             run = self.merge_runs(cell.text_frame.paragraphs[0]) 
+    #                             run.text = run.text.replace(run.text,data)
+    #             except IndexError:
+    #                 print (f'Index out of bounds error while filling {name} table ({row},{col})')
+
+
     def replace_block(self, begin_tag, end_tag, repl_text):
         for slide in self._prs.slides:
             for shape in slide.shapes:
@@ -268,7 +338,11 @@ class PowerPoint:
                 font.size = r.font.size
                 font.bold = r.font.bold
                 font.italic = r.font.italic
-                font.color.rgb = r.font.color.rgb
+                if hasattr(r.font.color, 'rgb'):
+                    font.color.rgb = r.font.color.rgb
+                # else:
+                #     font.color.theme_color = r.font.color.theme_color 
+
             run = self.merge_runs(p)
             run.text = run.text.replace("{app1_",f'{{app{app_no}_')
             run.text = run.text.replace("{end_app1_",f'{{end_app{app_no}_')
@@ -277,8 +351,8 @@ class PowerPoint:
         loc_short = "{0:,.0f}".format(loc) 
         if loc > 1000000:
             loc_short = "~{0:,.2f} MLOC".format(loc/1000000) 
-        elif loc > 100000:
-            loc_short = "~{0:,.0f} KLOC".format(loc/100000) 
+        elif loc < 100000:
+            loc_short = "~{0:,.0f} KLOC".format(loc/1000) 
         self.replace_text(f'{{app{app_no}_loc}}',f'{loc:,.0f}')
         self.replace_text(f'{{app{app_no}_loc_short}}',loc_short)
 
@@ -340,6 +414,11 @@ class PowerPoint:
                     sp = placeholder._sp
                     sp.getparent().remove(sp)
 
+    def get_shape_parent(self,shape):
+        rslt = None
+        if hasattr(shape,'_parent'):
+            rslt = shape._parent
+        return rslt
 
     def delete_paragraph(self,paragraph):
         p = paragraph._p
