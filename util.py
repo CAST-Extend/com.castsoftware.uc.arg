@@ -16,12 +16,16 @@ def list_to_text(list):
         last_name = ''
 
     for a in list:
-        rslt = rslt + a
-        if l >= 2 and a == last_name:
-            rslt = rslt + " and "
-        elif a != list[-1]:
-            rslt = rslt + ", "
+        rslt = rslt + a + ", "
+
+    rslt = rslt[:-2]
+    rslt = rreplace(rslt,', ',' and ')
+
     return rslt
+
+def rreplace(s, old, new, occurrence=1):
+    li = s.rsplit(old, occurrence)
+    return new.join(li)
 
 def each_risk_factor(ppt, aip_data, app_id, app_no):
     # collect the high risk grades
@@ -81,4 +85,5 @@ def format_table(writer, data, sheet_name,width):
         worksheet.write(0, col_num, value, header_format)
         w=width[col_num]
         worksheet.set_column(col_num, col_num, w)
+    return worksheet
 

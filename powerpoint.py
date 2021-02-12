@@ -32,7 +32,7 @@ class PowerPoint:
 
     def replace_risk_factor(self, grades, app_no=0, search_str=None):
         if search_str == None:
-            search_str=f'{{app{app_no}_risk_'
+            search_str=f'{{app{app_no+1}_risk_'
         
         for slide in self._prs.slides:
             for shape in slide.shapes:
@@ -119,9 +119,9 @@ class PowerPoint:
     def get_grade_color(self,grade):
         rgb = 0
         if grade > 3:
-            rgb = RGBColor(0,128,0) # green
+            rgb = RGBColor(0,176,80) # light green
         elif grade <3 and grade > 2:
-            rgb = RGBColor(0,255,0) # yellow
+            rgb = RGBColor(214,142,48) # yellow
         else:
             rgb = RGBColor(255,0,0) # red
         return rgb
@@ -136,6 +136,16 @@ class PowerPoint:
             if shape.has_text_frame:
                 for paragraph in shape.text_frame.paragraphs:
                     self.replace_paragraph_text(paragraph,search_str,repl_str)
+            elif shape.has_table:
+                tbl=shape.table
+                row_count = len(tbl.rows)
+                col_count = len(tbl.columns)
+                for r in range(0,row_count):
+                    for c in range(0, col_count):
+                        cell = tbl.cell(r,c)
+                        for paragraph in cell.text_frame.paragraphs:
+                            self.replace_paragraph_text(paragraph,search_str,repl_str)
+
 
     def replace_shape_name (self, slide, search_str, repl_str):
         for shape in slide.shapes:
@@ -200,7 +210,7 @@ class PowerPoint:
                 shape.chart.replace_data(chart_data)
 
 
-    def update_table(self, name, df, include_index=True):
+    def update_table(self, name, df, include_index=True, background=None):
         table_shape = self.get_shape_by_name(name)
         if table_shape != None and table_shape.has_table:
             table=table_shape.table
@@ -216,6 +226,18 @@ class PowerPoint:
                     run.text = text
 
             rows, cols = df.shape
+            if background:
+                cols = cols-1
+
+                colors = df[background]
+                for row in range(rows):
+                    rgb = colors.iloc[row].split(",")
+                    for col in range(cols):
+                        cell = table.cell(row+1,col)
+                        cell.fill.fore_color.rgb = RGBColor(int(rgb[0]), int(rgb [1]), int(rgb[2]))
+
+
+
             m = df.values
             for row in range(rows):
                 for col in range(cols):
@@ -230,34 +252,6 @@ class PowerPoint:
                     cell = table.cell(row+1,tbl_col)
                     run = self.merge_runs(cell.text_frame.paragraphs[0])
                     run.text = text
-
-    # def update_table(self, name, df):
-    #     table_shape = self.get_shape_by_name(name)
-    #     if table_shape != None and table_shape.has_table:
-    #         table=table_shape.table
-    #         row_end = len(table.rows)
-    #         col_end = len(table.columns)
-    #         df_max_rows = len(df.count(axis=1))
-    #         df_max_cols = len(df.count(axis=0))
-
-    #         row=col=0
-    #         for row in range(1,row_end):
-    #             try:
-    #                 if row <= df_max_rows:
-    #                     head = df.head()
-    #                     data = head.index[row-1]
-    #                     cell = table.cell(row,0)
-    #                     run = self.merge_runs(cell.text_frame.paragraphs[0]) 
-    #                     run.text = run.text.replace(run.text,data)
-    #                     for col in range(1,col_end):
-    #                         if col <= df_max_cols:
-    #                             data = str(df.iloc[row-1][col-1])
-    #                             cell = table.cell(row,col)
-    #                             run = self.merge_runs(cell.text_frame.paragraphs[0]) 
-    #                             run.text = run.text.replace(run.text,data)
-    #             except IndexError:
-    #                 print (f'Index out of bounds error while filling {name} table ({row},{col})')
-
 
     def replace_block(self, begin_tag, end_tag, repl_text):
         for slide in self._prs.slides:
