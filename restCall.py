@@ -175,9 +175,12 @@ class AipRestCall(RestCall):
             rslt_df = pd.DataFrame(json)
         return rslt_df
 
+
     def get_action_plan(self,domain_id,snapshot_id):
+        business_criteria = ['Robustness','Efficiency','Security','Transferability','Changeability']
+    
         catagory = ''
-        catagory2 = ''
+        tech_criteria = ''
         rslt_df =  pd.DataFrame()
         ap_summary_df =  pd.DataFrame()
         url = f'{domain_id}/applications/3/snapshots/{snapshot_id}/action-plan/issues?startRow=1&nbRows=100000'
@@ -194,8 +197,8 @@ class AipRestCall(RestCall):
             remediation = pd.json_normalize(rslt_df['remedialAction']) 
             rslt_df = rule_pattern.join([component,remediation])                                                  
 
-            rslt_df.insert(3,'rule.business','')
-            rslt_df.insert(3,'rule.parent','')
+            rslt_df.insert(3,'Business Criteria','')
+            rslt_df.insert(3,'tech_criteria','')
 
             save_rule_id = ''
             for key, value in rslt_df.iterrows():
@@ -206,27 +209,31 @@ class AipRestCall(RestCall):
                     (status,json) = self.get(url)
                     if status == requests.codes.ok and len(json) > 0:
                         catagory = ''
-                        catagory2 = ''
+                        tech_criteria = ''
                         for g1 in json['gradeAggregators']:
-                            catagory2 = g1['name']
+                            tech_criteria = g1['name']
                             for g2 in g1['gradeAggregators']:
-                                if g2['name'] != 'Total Quality Index':
+                                if g2['name'] in business_criteria:
                                     catagory = catagory + g2['name'] + ', '
                 
-                rslt_df.loc[key,'rule.parent']=catagory2
-                rslt_df.loc[key,'rule.business']=catagory[:-2]
+                rslt_df.loc[key,'tech_criteria']=tech_criteria
+                rslt_df.loc[key,'Business Criteria']=catagory[:-2]
 
             rslt_df = rslt_df.sort_values(by=['rule.id'])
             ap_summary_df = rslt_df.groupby(['rule.name']).count()
-            business = pd.DataFrame(rslt_df,columns=['rule.name','rule.parent','rule.business','tag','comment']).drop_duplicates()
+            business = pd.DataFrame(rslt_df,columns=['rule.name','tech_criteria','Business Criteria','tag','comment']).drop_duplicates()
             ap_summary_df.drop(ap_summary_df.columns.difference(['rule.name','component.name']),1,inplace=True)
             ap_summary_df = pd.merge(ap_summary_df,business, on='rule.name')
-            ap_summary_df = ap_summary_df[['rule.name','rule.business','component.name','tag','comment','rule.parent']]
+            ap_summary_df = ap_summary_df[['rule.name','Business Criteria','component.name','comment','tag','tech_criteria']]
             ap_summary_df = ap_summary_df.rename(columns={'component.name':'No. of Actions',
                                                           'rule.name':'Quality Rule',
-                                                          'rule.business':'Business Criteria'
+                                                          'tech_criteria':'Technical Criteria'
                                                           })
 
+            rslt_df = rslt_df.rename(columns={'rule.name':'Rule Name',
+                                              'comment':'Action Plan Priority',
+                                              'component.name':'Object Name Location'})
+            rslt_df = rslt_df[['Action Plan Priority','Rule Name','Object Name Location','rule.id']]
         return (rslt_df, ap_summary_df)
 
     def getLOC(self,domain_id):
