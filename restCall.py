@@ -66,7 +66,8 @@ class AipRestCall(RestCall):
         '60016':'Security',
         '60011':'Transferability',
         '60012':'Changeability',
-        '60015':'SEI Maintainability'
+        '60015':'SEI Maintainability',
+        '66033':'Documentation'
     }
 
     _violations = {
