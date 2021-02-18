@@ -63,44 +63,46 @@ class GeneratePPT:
 
         for app_no in range(0,app_cnt):
             app_id = self._app_list[app_no]
-            print (f'Working on {app_id}')
+            if self._aip_data.has_data(app_id):
+                print (f'Working on {app_id}')
+                grade_all = self._aip_data.get_app_grades(app_id)
+                self._ppt.replace_risk_factor(grade_all,app_no)
+                grade_by_tech_df = self._aip_data.get_grade_by_tech(app_id)
 
-            grade_all = self._aip_data.get_app_grades(app_id)
-            self._ppt.replace_risk_factor(grade_all,app_no)
-            grade_by_tech_df = self._aip_data.get_grade_by_tech(app_id)
+                self._ppt.update_table(f'app{app_no+1}_grade_by_tech_table',grade_by_tech_df.drop(['Documentation'],axis=1))
+                self._ppt.update_chart(f'app{app_no+1}_sizing_pie_chart',grade_by_tech_df['LOC'])
 
-            self._ppt.update_table(f'app{app_no+1}_grade_by_tech_table',grade_by_tech_df.drop(['Documentation'],axis=1))
-            self._ppt.update_chart(f'app{app_no+1}_sizing_pie_chart',grade_by_tech_df['LOC'])
+                snapshot = self._aip_data.snapshot(app=app_id)
+                app_name = snapshot['name']
+                self._ppt.replace_text(f'{{app{app_no+1}_name}}',app_name)
+                self._ppt.replace_text(f'{{app{app_no+1}_all_technogies}}',util.list_to_text(snapshot['technology']))
 
-            snapshot = self._aip_data.snapshot(app=app_id)
-            app_name = snapshot['name']
-            self._ppt.replace_text(f'{{app{app_no+1}_name}}',app_name)
-            self._ppt.replace_text(f'{{app{app_no+1}_all_technogies}}',util.list_to_text(snapshot['technology']))
+                #calculate high and medium risk factors
+                risk_grades = self._aip_data.calc_health_grades_high_risk(grade_all)
+                if risk_grades.empty:
+                    risk_grades = self._aip_data.calc_health_grades_medium_risk(grade_all)
+                self._ppt.replace_text(f'{{app{app_no+1}_at_risk_grade_names}}',util.list_to_text(risk_grades.index.tolist()).lower())
 
-            #calculate high and medium risk factors
-            risk_grades = self._aip_data.calc_health_grades_high_risk(grade_all)
-            if risk_grades.empty:
-                risk_grades = self._aip_data.calc_health_grades_medium_risk(grade_all)
-            self._ppt.replace_text(f'{{app{app_no+1}_at_risk_grade_names}}',util.list_to_text(risk_grades.index.tolist()).lower())
+                loc_df = self._aip_data.get_loc_sizing(app_id)
+                loc = loc_df['Number of Code Lines']
+                self._ppt.replace_loc(loc,app_no+1)
 
-            loc_df = self._aip_data.get_loc_sizing(app_id)
-            loc = loc_df['Number of Code Lines']
-            self._ppt.replace_loc(loc,app_no+1)
+                loc_tbl = pd.DataFrame.from_dict(data=self._aip_data.get_loc_sizing(app_id),orient='index').drop('Critical Violations')
+                loc_tbl = loc_tbl.rename(columns={0:'loc'})
+                loc_tbl['percent'] = round((loc_tbl['loc'] / loc_tbl['loc'].sum()) * 100,2)
+                loc_tbl['loc']=pd.Series(["{0:,.0f}".format(val) for val in loc_tbl['loc']], index = loc_tbl.index)
+                loc_tbl['percent']=pd.Series(["{0:.2f}%".format(val) for val in loc_tbl['percent']], index = loc_tbl.index)
+                self._ppt.update_table(f'app{app_no+1}_loc_table',loc_tbl,has_header=False)
+                self._ppt.update_chart(f'app{app_no+1}_loc_pie_chart',loc_tbl['loc'])
 
-            loc_tbl = pd.DataFrame.from_dict(data=self._aip_data.get_loc_sizing(app_id),orient='index').drop('Critical Violations')
-            loc_tbl = loc_tbl.rename(columns={0:'loc'})
-            loc_tbl['percent'] = round((loc_tbl['loc'] / loc_tbl['loc'].sum()) * 100,2)
-            loc_tbl['loc']=pd.Series(["{0:,.0f}".format(val) for val in loc_tbl['loc']], index = loc_tbl.index)
-            loc_tbl['percent']=pd.Series(["{0:.2f}%".format(val) for val in loc_tbl['percent']], index = loc_tbl.index)
-            self._ppt.update_table(f'app{app_no+1}_loc_table',loc_tbl,has_header=False)
-            self._ppt.update_chart(f'app{app_no+1}_loc_pie_chart',loc_tbl['loc'])
+                self._ppt.replace_grade(grade_all,app_no+1)
 
-            self._ppt.replace_grade(grade_all,app_no+1)
-
-            self.fill_sizing(app_no)
-            self.fill_critical_rules(app_no)
-            ap.fill_action_plan(app_no)
-            self.fill_violations(app_no)
+                self.fill_sizing(app_no)
+                self.fill_critical_rules(app_no)
+                ap.fill_action_plan(app_no)
+                self.fill_violations(app_no)
+            else:
+                print (f'No snapshot available for {app_id}')
 
         self._ppt.save()
 
