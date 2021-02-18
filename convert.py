@@ -65,6 +65,11 @@ class GeneratePPT:
             app_id = self._app_list[app_no]
             if self._aip_data.has_data(app_id):
                 print (f'Working on {app_id}')
+
+                # do risk factors for the executive summary page
+                risk_grades = util.each_risk_factor(self._ppt, self._aip_data,app_id, app_no)
+                self._ppt.replace_text(f'{{app{app_no+1}_high_risk_grade_names}}',util.list_to_text(risk_grades.index.values))
+
                 grade_all = self._aip_data.get_app_grades(app_id)
                 self._ppt.replace_risk_factor(grade_all,app_no)
                 grade_by_tech_df = self._aip_data.get_grade_by_tech(app_id)
