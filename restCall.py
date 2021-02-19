@@ -66,7 +66,8 @@ class AipRestCall(RestCall):
         '60016':'Security',
         '60011':'Transferability',
         '60012':'Changeability',
-        '60015':'SEI Maintainability'
+        '60015':'SEI Maintainability',
+        '66033':'Documentation'
     }
 
     _violations = {
@@ -80,7 +81,7 @@ class AipRestCall(RestCall):
         (status,json) = self.get()
         if status == requests.codes.ok:
             try: 
-                domain_id = list(filter(lambda x:x["schema"]==schema_name,json))[0]['name']
+                domain_id = list(filter(lambda x:x["schema"].lower()==schema_name.lower(),json))[0]['name']
             except IndexError:
                 self._logger.error(f'Domain not found for schema {schema_name}')
                 
@@ -121,6 +122,7 @@ class AipRestCall(RestCall):
                 grade.loc['All'] = a
             grade.loc[tech] = t
             first_tech=False
+            
         return grade
 
     def get_sizing_by_technology(self,domain_id,snapshot,sizing):
@@ -293,16 +295,23 @@ class AipData():
             if domain_id is not None:
                 self._data[s]['domain_id']=domain_id
                 self._data[s]['snapshot']=rest.get_latest_snapshot(domain_id)
-                self._data[s]['grades']=rest.get_grades_by_technology(domain_id,self._data[s]['snapshot'])
-                self._data[s]['sizing']=rest.get_sizing_by_technology(domain_id,self._data[s]['snapshot'],self._sizing)
-                self._data[s]['loc_sizing']=rest.get_sizing(domain_id,self._sizing) 
-                self._data[s]['tech_sizing']=rest.get_sizing(domain_id,self._tech_sizing) 
-                self._data[s]['violation_sizing']=rest.get_violation_CR(domain_id)
-                self._data[s]['critical_rules']=rest.get_rules(domain_id,self._data[s]['snapshot']['id'],60017,non_critical=False)
+                if self._data[s]['snapshot']:
+                    self._data[s]['has data'] = True
+                    self._data[s]['grades']=rest.get_grades_by_technology(domain_id,self._data[s]['snapshot'])
+                    self._data[s]['sizing']=rest.get_sizing_by_technology(domain_id,self._data[s]['snapshot'],self._sizing)
+                    self._data[s]['loc_sizing']=rest.get_sizing(domain_id,self._sizing) 
+                    self._data[s]['tech_sizing']=rest.get_sizing(domain_id,self._tech_sizing) 
+                    self._data[s]['violation_sizing']=rest.get_violation_CR(domain_id)
+                    self._data[s]['critical_rules']=rest.get_rules(domain_id,self._data[s]['snapshot']['id'],60017,non_critical=False)
 
-                (ap_df,ap_summary_df) = rest.get_action_plan(domain_id,self._data[s]['snapshot']['id']) 
-                self._data[s]['action_plan']=ap_df
-                self._data[s]['action_plan_summary']=ap_summary_df
+                    (ap_df,ap_summary_df) = rest.get_action_plan(domain_id,self._data[s]['snapshot']['id']) 
+                    self._data[s]['action_plan']=ap_df
+                    self._data[s]['action_plan_summary']=ap_summary_df
+                else:
+                    self._data[s]['has data'] = False
+
+    def has_data(self, app):
+        return self._data[app]['has data']
 
     def data(self,app):
         return self._data[app]
@@ -337,9 +346,10 @@ class AipData():
     def calc_grades_all_apps(self):
         all_app=pd.DataFrame()
         for row in self._data:
-            app_name=self.snapshot(row)['name']
-            grades=self.grades(row)
-            all_app = pd.concat([all_app,grades[grades.index.isin(['All'])].rename(index={'All': app_name})]).drop_duplicates()
+            if self.has_data(row):
+                app_name=self.snapshot(row)['name']
+                grades=self.grades(row)
+                all_app = pd.concat([all_app,grades[grades.index.isin(['All'])].rename(index={'All': app_name})]).drop_duplicates()
         return all_app[all_app.columns].mean(axis=0)
 
     def calc_grades_health(self,grade_all):
@@ -377,11 +387,14 @@ class AipData():
 
         last_name = self._base[-2]
         for a in self._base:
-            rslt = rslt + self.snapshot(a)['name']
-            if l >= 2 and a == last_name:
-                rslt = rslt + " and "
-            elif a != self._base[-1]:
-                rslt = rslt + ", "
+            if self.has_data(a):
+                rslt = rslt + self.snapshot(a)['name']
+                if l >= 2 and a == last_name:
+                    rslt = rslt + " and "
+                elif a != self._base[-1]:
+                    rslt = rslt + ", "
+            else:
+                rslt = "NO SNAPSHOT INFORMATION AVAILABLE"
         return rslt
 
     def get_grade_by_tech(self,app):
