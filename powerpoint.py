@@ -49,7 +49,7 @@ class PowerPoint:
                             run = paragraph.runs[0]
                             run.text = cur_text
 
-                            while(1==1):
+                            while True:
                                 t = cur_text.find(search_str)
                                 if t == -1: 
                                     break
@@ -210,7 +210,7 @@ class PowerPoint:
                 shape.chart.replace_data(chart_data)
 
 
-    def update_table(self, name, df, include_index=True, background=None):
+    def update_table(self, name, df, include_index=True, background=None, has_header=True):
         table_shape = self.get_shape_by_name(name)
         if table_shape != None and table_shape.has_table:
             table=table_shape.table
@@ -220,11 +220,16 @@ class PowerPoint:
             # Insert the row zero names
             if include_index:
                 for col_index, col_name in enumerate(df.index):
-                    cell = table.cell(col_index+1,0)
-                    text = str(col_name)
-                    run = self.merge_runs(cell.text_frame.paragraphs[0])
-                    run.text = text
-
+                    try:
+                        if has_header:
+                            cell = table.cell(col_index+1,0)
+                        else:
+                            cell = table.cell(col_index,0)
+                        text = str(col_name)
+                        run = self.merge_runs(cell.text_frame.paragraphs[0])
+                        run.text = text
+                    except IndexError:
+                        self._logger.warn('index error in update_table while setting df index')
             rows, cols = df.shape
             if background:
                 cols = cols-1
@@ -233,8 +238,14 @@ class PowerPoint:
                 for row in range(rows):
                     rgb = colors.iloc[row].split(",")
                     for col in range(cols):
-                        cell = table.cell(row+1,col)
-                        cell.fill.fore_color.rgb = RGBColor(int(rgb[0]), int(rgb [1]), int(rgb[2]))
+                        try:
+                            if has_header:
+                                cell = table.cell(row+1,col)
+                            else:
+                                cell = table.cell(row,col)
+                            cell.fill.fore_color.rgb = RGBColor(int(rgb[0]), int(rgb [1]), int(rgb[2]))
+                        except IndexError:
+                            self._logger.warn('index error in update_table while setting background color')
 
 
 
@@ -249,9 +260,16 @@ class PowerPoint:
                     else:
                         tbl_col=col
 
-                    cell = table.cell(row+1,tbl_col)
-                    run = self.merge_runs(cell.text_frame.paragraphs[0])
-                    run.text = text
+                    try:
+                        if has_header:
+                            cell = table.cell(row+1,tbl_col)
+                        else:
+                            cell = table.cell(row,tbl_col)
+
+                        run = self.merge_runs(cell.text_frame.paragraphs[0])
+                        run.text = text
+                    except IndexError:
+                        self._logger.warn('index error in update_table while setting values')
 
     def replace_block(self, begin_tag, end_tag, repl_text):
         for slide in self._prs.slides:
@@ -358,17 +376,24 @@ class PowerPoint:
         self.replace_text(f'{{app{app_no}_loc_category}}',size_catagory)
 
     def duplicate_slides(self, app_cnt):
+        for cnt in range(2,app_cnt+1):
+            for idx, slide in enumerate(self._prs.slides):
+                for shape in slide.shapes:
+                    if shape.has_text_frame:
+                        for paragraph in shape.text_frame.paragraphs:
+                            if paragraph.text == "{app_per_page}":
+    #                            self.replace_slide_text(slide,"{app_per_page}","")
+                                new_slide = self.copy_slide(idx)
+                                self.replace_slide_text(new_slide,"{app_per_page}","")
+                                self.replace_slide_text(new_slide,"{app1_",f'{{app{cnt}_')
+                                self.replace_shape_name(new_slide,"app1_",f'app{cnt}_')
         for idx, slide in enumerate(self._prs.slides):
             for shape in slide.shapes:
                 if shape.has_text_frame:
                     for paragraph in shape.text_frame.paragraphs:
                         if paragraph.text == "{app_per_page}":
                             self.replace_slide_text(slide,"{app_per_page}","")
-                            for cnt in range(2,app_cnt+1):
-                                new_slide = self.copy_slide(idx)
-                                self.replace_slide_text(new_slide,"{app_per_page}","")
-                                self.replace_slide_text(new_slide,"{app1_",f'{{app{cnt}_')
-                                self.replace_shape_name(new_slide,"app1_",f'app{cnt}_')
+
     
     def copy_slide(self,index):
         source = self._prs.slides[index]
@@ -418,6 +443,18 @@ class PowerPoint:
         p = paragraph._p
         parent_element = p.getparent()
         parent_element.remove(p)
+
+    def get_page_no(self,shape):
+        page_no = 0
+        if shape:
+            while True:
+                shape = self.get_shape_parent(shape)
+                if type(shape).__name__ == 'Slide':
+                    break;
+            
+            page_no = self._prs.slides.index(shape) 
+        return page_no
+
 
     def delete_run(self,run):
         r = run._r
