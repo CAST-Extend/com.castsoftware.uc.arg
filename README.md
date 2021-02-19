@@ -10,7 +10,7 @@ The script is used to generate a PowerPoint deck from the provided template. Thi
 ## Usage
 The script is designed to run on the command line using one parameter, --config, used to identify the project and applications to include in the presentation.
 
-    py convert.py --config.properties 
+    py convert.py --config config.properties 
 
 ### Output
 A single PowerPoint deck and one excel spread sheet is generated for each application configured in the properties file. The Deck is organized with an executive summary, one section per application containing detailed information and an appendix.  The excel sheets are hold the application action plan information and divided into two tabs, summary, and detail.  In the event an action plan is not configured, for the application, the sheets will be empty.    
