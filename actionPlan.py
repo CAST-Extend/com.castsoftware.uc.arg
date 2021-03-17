@@ -70,6 +70,12 @@ class ActionPlan:
             if violation_table:
                 page_no = self._ppt.get_page_no(violation_table)
                 self._ppt.replace_text(f"{{app{app_no+1}_HL_violation_page}}",str(page_no))
+        else:
+            self._ppt.replace_text(f"{{app{app_no+1}_extreme_violation_total}}",'TBD') 
+            self._ppt.replace_text(f"{{app{app_no+1}_high_violation_total}}",'TBD') 
+            self._ppt.replace_text(f"{{app{app_no+1}_moderate_violation_total}}",'TBD') 
+            self._ppt.replace_text(f"{{app{app_no+1}_low_violation_total}}",'TBD') 
+
 
 
 
