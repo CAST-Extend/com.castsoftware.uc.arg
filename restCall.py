@@ -36,9 +36,8 @@ class RestCall:
         start_tm = perf_counter()
 
         # TODO: Errorhandling
-        
         headers = {'Accept': 'application/json'}
-        u = f'{self._base_url}{url}'
+        u = urllib.parse.quote(f'{self._base_url}{url}',safe='/:&?=')
         resp = requests.get(url= u, auth = self._auth, headers=headers)
 
         # Save the duration, if enabled.
@@ -290,6 +289,7 @@ class AipData():
         for s in schema:
             print (f'Collecting data for {s}')
             self._data[s]={}
+            self._data[s]['has data'] = False
             central_schema = f'{s}_central'
             domain_id = rest.get_domain(central_schema)
             if domain_id is not None:
@@ -307,8 +307,8 @@ class AipData():
                     (ap_df,ap_summary_df) = rest.get_action_plan(domain_id,self._data[s]['snapshot']['id']) 
                     self._data[s]['action_plan']=ap_df
                     self._data[s]['action_plan_summary']=ap_summary_df
-                else:
-                    self._data[s]['has data'] = False
+            else:
+                raise ValueError(f'Domain not found for {s}')
 
     def has_data(self, app):
         return self._data[app]['has data']
@@ -359,12 +359,12 @@ class AipData():
 
     def calc_health_grades_high_risk(self,grade_all):
         grade_health = self.calc_grades_health(grade_all)
-        grade_at_risk=grade_health[grade_health < 2.5].dropna()
+        grade_at_risk=grade_health[grade_health < 2].dropna()
         return grade_at_risk
 
     def calc_health_grades_medium_risk(self,grade_all):
         grade_health = self.calc_grades_health(grade_all)
-        grade_at_risk=grade_health[grade_health > 2.5].dropna()
+        grade_at_risk=grade_health[grade_health > 2].dropna()
         grade_at_risk=grade_health[grade_health < 3].dropna()
         return grade_at_risk
 
