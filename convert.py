@@ -20,9 +20,11 @@ class GeneratePPT:
     _effort_df = None
     _output_folder = None
 
-    def __init__(self,project,app_list,template,output_folder):
-        self._app_list = app_list
-        self._output_folder=output_folder
+    def __init__(self,config):
+        project = config.get('project').data
+        template = config.get('template').data
+        self._app_list = config.get('application.list').data.strip().split(',')
+        self._output_folder = config.get('output.folder').data
 
         out = f"{self._output_folder}/{project}.pptx"
         print (f'Generating {out}')
@@ -156,11 +158,7 @@ if __name__ == '__main__':
     config = Properties()
     with open(args.config, 'rb') as config_file:
         config.load(config_file)
-        project_name = config.get('project').data
-        template_name = config.get('template').data
-        app_list = config.get('application.list').data.strip().split(',')
-        output_folder = config.get('output.folder').data
 
-    GeneratePPT(project_name,app_list,template_name,output_folder)
+    GeneratePPT(config)
 
 
