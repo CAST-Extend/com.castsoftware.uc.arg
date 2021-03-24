@@ -62,7 +62,6 @@ class RestCall:
         # TODO: Errorhandling
         
         headers = {'Accept': '*/*'}
-        #u = f'{self._base_url}{url}'
         u = urllib.parse.quote(f'{self._base_url}{url}',safe='/:&?=')
         resp = requests.get(url= u, auth = self._auth, headers=headers)
 

@@ -212,6 +212,11 @@ class GeneratePPT:
         self._aip_user = config.get('aip.user').data
         self._aip_pswd = config.get('aip.pswd').data
 
+        if self._generate_HL.lower() == 'yes':
+            self._generate_HL = True
+        else:     
+            self._generate_HL = False
+
     def fill_critical_rules(self,app_no):
         app_id = self._app_list[app_no]
         rules_df = self._aip_data.critical_rules(app_id)
@@ -265,7 +270,8 @@ if __name__ == '__main__':
 
     # Retreive HL data and generated HL specific slides.
     # TODO: Only if HL generation is enabled.
-    ppt.get_hl_data()
+    if ppt._generate_HL:
+        ppt.get_hl_data()
 
     ppt.save_ppt()
 
