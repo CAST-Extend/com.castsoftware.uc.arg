@@ -31,9 +31,6 @@ class GeneratePPT:
     _hl_apps_df = pd.DataFrame()
     _hl_app_list = []
 
-    _crit_cves_df, _high_cves_df, _med_cves_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-    _high_lic_df, _med_lic_df = pd.DataFrame(), pd.DataFrame()
-
     def __init__(self, config):
         self.read_config(config)
 
