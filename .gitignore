@@ -1,3 +1,4 @@
 *.xlsx
 **/deck/**
 **/__pycache__/**
+.vscode/launch.json
