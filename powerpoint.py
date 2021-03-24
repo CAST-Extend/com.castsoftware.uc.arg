@@ -60,8 +60,6 @@ class PowerPoint:
                                         grade=grades[g]
                                         risk = ''
                                         if grade < 2:
-                                            risk = 'very high'
-                                        elif grade < 2.5:
                                             risk = 'high'
                                         elif grade < 3:
                                             risk = 'medium'
@@ -128,6 +126,8 @@ class PowerPoint:
 
 
     def replace_text (self, search_str, repl_str):
+        if len(str(repl_str)) == 0:
+            repl_str = 'TBD'
         for slide in self._prs.slides:
             self.replace_slide_text(slide, search_str, repl_str)
 
