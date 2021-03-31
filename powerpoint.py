@@ -1,5 +1,6 @@
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
+from pptx.chart.plot import BarPlot
 from pptx.parts.chart import ChartPart
 from pptx.parts.embeddedpackage import EmbeddedXlsxPart
 from pptx.dml.color import ColorFormat, RGBColor
@@ -113,6 +114,20 @@ class PowerPoint:
                                         box = self.get_shape_by_name(box_name,slide)
                                         if box != None:
                                             box.line.color.rgb = color
+                                            self.update_grade_slider(f'{search_str[1:]}chart_{g}', [grade])
+
+    def update_grade_slider(self, name,data):
+        shape = self.get_shape_by_name(name)
+        try:
+            if shape.has_chart:
+                chart_data = CategoryChartData()
+                # chart_data.categories = titles
+                
+                chart_data.categories = 'grade'
+                chart_data.add_series('Series 1', data)
+                shape.chart.replace_data(chart_data)
+        except AttributeError:
+            self._logger.debug(f'Invalid template configuration: {name}')
 
     def get_grade_color(self,grade):
         rgb = 0
