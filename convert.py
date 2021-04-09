@@ -103,10 +103,26 @@ class GeneratePPT:
                     loc = loc_df['Number of Code Lines']
                     self._ppt.replace_loc(loc,app_no+1)
 
+
+                    """
+                        Populate the document insites page
+                        The necessary data is found in the loc_tbl
+                    """
                     loc_tbl = pd.DataFrame.from_dict(data=self._aip_data.get_loc_sizing(app_id),orient='index').drop('Critical Violations')
                     loc_tbl = loc_tbl.rename(columns={0:'loc'})
                     loc_tbl['percent'] = round((loc_tbl['loc'] / loc_tbl['loc'].sum()) * 100,2)
                     loc_tbl['loc']=pd.Series(["{0:,.0f}".format(val) for val in loc_tbl['loc']], index = loc_tbl.index)
+
+                    percent_comment = loc_tbl.loc['Number of Comment Lines','percent']
+                    percent_comment_out = loc_tbl.loc['Number of Commented-out Code Lines','percent']
+
+                    if percent_comment < 15:
+                        comment_level='low'
+                    else:
+                        comment_level='good'
+                    self._ppt.replace_text(f'{{app{app_no+1}_comment_level}}',comment_level)
+                    self._ppt.replace_text(f'{{app{app_no+1}_comment_loc}}',percent_comment)
+
                     loc_tbl['percent']=pd.Series(["{0:.2f}%".format(val) for val in loc_tbl['percent']], index = loc_tbl.index)
                     self._ppt.update_table(f'app{app_no+1}_loc_table',loc_tbl,has_header=False)
                     self._ppt.update_chart(f'app{app_no+1}_loc_pie_chart',loc_tbl['loc'])

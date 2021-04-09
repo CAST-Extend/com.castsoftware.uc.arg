@@ -141,8 +141,15 @@ class PowerPoint:
 
 
     def replace_text (self, search_str, repl_str):
-        if len(str(repl_str)) == 0:
+        skip = False
+        omit_list = ["immediate_action","other","risk_detail"]
+        for s in omit_list:
+            if s in search_str:
+                skip=True
+
+        if not skip and len(str(repl_str)) == 0:
             repl_str = 'TBD'
+
         for slide in self._prs.slides:
             self.replace_slide_text(slide, search_str, repl_str)
 
@@ -375,11 +382,11 @@ class PowerPoint:
             run.text = run.text.replace("{end_app1_",f'{{end_app{app_no}_')
 
     def replace_loc(self, loc, app_no):
-        loc_short = "{0:,.0f}".format(loc) 
+        loc_short = "{0:,.0f} LoC".format(loc) 
         if loc > 1000000:
-            loc_short = "~{0:,.2f} MLOC".format(loc/1000000) 
-        elif loc < 100000:
-            loc_short = "~{0:,.0f} KLOC".format(loc/1000) 
+            loc_short = "~{0:,.2f} MLoC".format(loc/1000000) 
+        elif loc < 1000000 and loc > 1000:
+            loc_short = "~{0:,.0f} KLoC".format(loc/1000) 
         self.replace_text(f'{{app{app_no}_loc}}',f'{loc:,.0f}')
         self.replace_text(f'{{app{app_no}_loc_short}}',loc_short)
 
