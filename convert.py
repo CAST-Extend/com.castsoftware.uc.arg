@@ -160,6 +160,10 @@ class GeneratePPT:
 
                 # Always retrieve all of the CRITICAL sev CVEs.
                 try:
+                    self._crit_cves_df = pd.DataFrame() 
+                    self._high_cves_df = pd.DataFrame() 
+                    self._med_cves_df = pd.DataFrame() 
+
                     self._crit_cves_df = self._hl_data.get_cves(app_id, 'critical')
 
                     # Only retrieve the HIGH sev CVEs, if we do not have enough of the CRITICAL sevs and,
