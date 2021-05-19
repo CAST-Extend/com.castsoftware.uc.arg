@@ -103,10 +103,7 @@ class ActionPlan:
                     if t.strip() not in list:
                         list.append(t.strip())
 
-        if sum==0:
-            sum_txt = 'zero'
-        else:
-            sum_txt = str(sum)
+        sum_txt = str(sum)
         
         if not list:
             list.append(default)
