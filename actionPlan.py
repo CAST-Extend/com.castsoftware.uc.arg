@@ -23,15 +23,15 @@ class ActionPlan:
     __low_cost = 0
     __med_cost = 0
 
-    __extrm_vio_total = 0
-    __high_vio_total = 0
-    __med_vio_total = 0
-    __low_vio_total = 0
+    __extrm_total = 0
+    __high_total = 0
+    __med_total = 0
+    __low_total = 0
 
-    __extrm_data = ''
-    __high_data = ''
-    __med_data = ''
-    __low_data = ''
+    __extrm_data = pd.DataFrame()
+    __high_data = pd.DataFrame()
+    __med_data = pd.DataFrame()
+    __low_data = pd.DataFrame()
 
     def get_extreme_costing(self):    
         return  self.__extrm_effort, \
@@ -172,17 +172,21 @@ class ActionPlan:
     def list_violations(self,filtered):
         first = True
         text = ""
-        for criteria in filtered['Technical Criteria'].unique():
-            df = filtered[filtered['Technical Criteria']==criteria]
-            total = df['No. of Actions'].sum()
+        try:
+            for criteria in filtered['Technical Criteria'].unique():
+                df = filtered[filtered['Technical Criteria']==criteria]
+                total = df['No. of Actions'].sum()
+                
+                cases = 'for'
+                if first:
+                    cases = 'cases of'
+                    first = False
+                
+                rule = criteria[criteria.find('-')+1:].strip().lower()
+                if len(rule) == 0:
+                    rule = criteria
+                text = f'{text}{total} {cases} {rule}, '
+            return util.rreplace(text[:-2],', ',' and ')
+        except (KeyError):
+            return ""
             
-            cases = 'for'
-            if first:
-                cases = 'cases of'
-                first = False
-            
-            rule = criteria[criteria.find('-')+1:].strip().lower()
-            if len(rule) == 0:
-                rule = criteria
-            text = f'{text}{total} {cases} {rule}, '
-        return util.rreplace(text[:-2],', ',' and ')

@@ -1,3 +1,4 @@
+from logging import info, warn
 from pandas.core.frame import DataFrame
 from restCall import AipRestCall
 from restCall import AipData
@@ -86,9 +87,9 @@ class GeneratePPT(Logger):
             except (KeyError):
                 self._appl_title[appl]=appl
             try:
-                test = self._appl_title[appl]
+                test = self._hl_app_list[appl]
             except (KeyError):
-                self._appl_title[appl]=appl
+                self._hl_app_list[appl]=appl
 
             #test the application highlight list, if not found set it to the list value 
             try:
@@ -319,30 +320,34 @@ class GeneratePPT(Logger):
                 self._ppt.replace_text(f'{{app{app_no+1}_high_lic_tot}}',self._hl_data.get_lic_high_tot(app_id))
                 self._ppt.replace_text(f'{{app{app_no+1}_oss_cmpn_tot}}',oss_cmpnt_tot)
 
-                for ln in lic_df['license'].unique():
-                    data={}
-                    data['License Type']=ln
+                if not lic_df.empty:
+                    for ln in lic_df['license'].unique():
+                        data={}
+                        data['License Type']=ln
 
-                    lic_type=lic_df[lic_df['license']==ln]
-                    lic_cnt = len(lic_type)
-                    data['Component Count']=lic_cnt
-                    if lic_cnt > 0:
-                        data['Risk Factor']=lic_type.iloc[0]['compliance']
-                        data['Example']=", ".join(lic_type.head(3)['component'].tolist())
-                        lic_summary=lic_summary.append(data,ignore_index=True)
+                        lic_type=lic_df[lic_df['license']==ln]
+                        lic_cnt = len(lic_type)
+                        data['Component Count']=lic_cnt
+                        if lic_cnt > 0:
+                            data['Risk Factor']=lic_type.iloc[0]['compliance']
+                            data['Example']=", ".join(lic_type.head(3)['component'].tolist())
+                            lic_summary=lic_summary.append(data,ignore_index=True)
 
-                #app1_HL_table_lic_risks
-                if len(lic_summary.loc[lic_summary['Risk Factor']=='High'])>0:
-                    lic_summary.loc[lic_summary['Risk Factor']=='High','forground']='255,0,0'
+                    #app1_HL_table_lic_risks
+                    if len(lic_summary.loc[lic_summary['Risk Factor']=='High'])>0:
+                        lic_summary.loc[lic_summary['Risk Factor']=='High','forground']='255,0,0'
+                    
+                    if len(lic_summary.loc[lic_summary['Risk Factor']=='Medium'])>0:
+                        lic_summary.loc[lic_summary['Risk Factor']=='Medium','forground']='209,125,13'
+
+                    self._ppt.update_table(f'app{app_no+1}_HL_table_lic_risks',
+                                        lic_summary,include_index=False,
+                                        forground='forground')
                 
-                if len(lic_summary.loc[lic_summary['Risk Factor']=='Medium'])>0:
-                    lic_summary.loc[lic_summary['Risk Factor']=='Medium','forground']='209,125,13'
+                    high_lic_total = len(lic_summary.loc[lic_summary['Risk Factor']=='High'])
+                else:
+                    self.info('No license risks found')
 
-                self._ppt.update_table(f'app{app_no+1}_HL_table_lic_risks',
-                                       lic_summary,include_index=False,
-                                       forground='forground')
-                
-                high_lic_total = len(lic_summary.loc[lic_summary['Risk Factor']=='High'])
 
                 self._ppt.update_table(f'app{app_no+1}_HL_table_CVEs',oss_df,include_index=False)
 
@@ -362,7 +367,7 @@ class GeneratePPT(Logger):
                 fix_now_cost = round(fix_now_cost + crit_cve_cost,2)
 
                 near_term_days = int(near_term_days) + int(high_cve_days)
-                near_term_cost = round(near_term_cost + high_cve_cost + high_cve_cost,2)
+                near_term_cost = round(near_term_cost + high_cve_cost + med_cve_cost,2)
 
                 self._ppt.replace_text(f'{{app{app_no+1}_high_sec_tot}}','{high_cve}')
                 self._ppt.replace_text(f'{{app{app_no+1}_med_sec_tot}}','{med_cve}')
