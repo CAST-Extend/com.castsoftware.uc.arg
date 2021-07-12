@@ -1,3 +1,4 @@
+from os import close
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.chart.plot import BarPlot
@@ -123,7 +124,7 @@ class PowerPoint:
                 chart_data = CategoryChartData()
                 # chart_data.categories = titles
                 
-                chart_data.categories = 'grade'
+                chart_data.categories = ['grade']
                 chart_data.add_series('Series 1', data)
                 shape.chart.replace_data(chart_data)
         except AttributeError:
@@ -168,25 +169,51 @@ class PowerPoint:
                         for paragraph in cell.text_frame.paragraphs:
                             self.replace_paragraph_text(paragraph,search_str,repl_str)
 
+    def replace_paragraph_text (self, paragraph, search_str, repl_str):
+        if paragraph.text.find(search_str)!=-1:
+            t_parags = len(paragraph.runs)
+            for run_idx in range(t_parags):
+                run = paragraph.runs[run_idx]
+                if '{' in run.text and '}' in run.text:
+                    run.text = run.text.replace(str(search_str), str(repl_str))
+                elif '{' in run.text and '}' not in run.text:
+                    #have a partial tag, need to merge runs
+                    base_run = run
+                    close_found = False
+                    if run_idx < t_parags:
+                        for mrg_idx in range(run_idx+1,t_parags):
+                            m_run = paragraph.runs[mrg_idx]
+                            base_run.text = base_run.text + m_run.text
+                            if '}' in m_run.text:
+                                close_found = True
+                                break
+                        if close_found:
+                            #delete all extra runs
+                            for i in reversed(range(run_idx+1,mrg_idx+1)):
+                               self.delete_run(paragraph.runs[i]) 
+                            self.replace_paragraph_text(paragraph, search_str, repl_str)
+                            break
+
+
+                
+    
+    # original - kinda working
+    # def replace_paragraph_text (self, paragraph, search_str, repl_str):
+    #     if paragraph.text.find(search_str)!=-1:
+    #         cur_text=''
+    #         first=True
+    #         for run in paragraph.runs:
+    #             cur_text = cur_text + run.text
+    #             if first != True:
+    #                 self.delete_run(run)
+    #             first=False
+    #         run = paragraph.runs[0]
+    #         run.text = cur_text.replace(str(search_str), str(repl_str))
 
     def replace_shape_name (self, slide, search_str, repl_str):
         for shape in slide.shapes:
             if shape.name.find(search_str) != -1: 
                 shape.name = shape.name.replace(search_str,repl_str)
-
-
-
-    def replace_paragraph_text (self, paragraph, search_str, repl_str):
-        if paragraph.text.find(search_str)!=-1:
-            cur_text=''
-            first=True
-            for run in paragraph.runs:
-                cur_text = cur_text + run.text
-                if first != True:
-                    self.delete_run(run)
-                first=False
-            run = paragraph.runs[0]
-            run.text = cur_text.replace(str(search_str), str(repl_str))
 
     def get_shape_by_name(self, name, use_slide=None):
         rslt = None
@@ -231,8 +258,37 @@ class PowerPoint:
                 chart_data.add_series('Series 1', data)
                 shape.chart.replace_data(chart_data)
 
+    def set_table_bgcolor(self,table,colors,rows,cols,has_header):
+        for row in range(rows):
+            rgb = colors.iloc[row].split(",")
+            for col in range(cols):
+                try:
+                    if has_header:
+                        cell = table.cell(row+1,col)
+                    else:
+                        cell = table.cell(row,col)
+                    cell.fill.solid()
+                    cell.fill.fore_color.rgb = RGBColor(int(rgb[0]), int(rgb [1]), int(rgb[2]))
+                except IndexError:
+                    self._logger.warn('index error in update_table while setting background color')
+    
+    def set_table_font_color(self,table,colors,rows,cols,has_header):
+        for row in range(rows):
+            rgb = colors.iloc[row].split(",")
+            for col in range(cols):
+                try:
+                    if has_header:
+                        cell = table.cell(row+1,col)
+                    else:
+                        cell = table.cell(row,col)
 
-    def update_table(self, name, df, include_index=True, background=None, has_header=True):
+                    paragraph = cell.text_frame.paragraphs[0]
+                    run = self.merge_runs(paragraph)
+                    run.font.color.rgb=RGBColor(int(rgb[0]), int(rgb [1]), int(rgb[2]))
+                except IndexError:
+                    self._logger.warn('index error in update_table while setting background color')
+
+    def update_table(self, name, df, include_index=True, background=None, forground=None, has_header=True):
         table_shape = self.get_shape_by_name(name)
         if table_shape != None and table_shape.has_table:
             table=table_shape.table
@@ -251,25 +307,20 @@ class PowerPoint:
                         run = self.merge_runs(cell.text_frame.paragraphs[0])
                         run.text = text
                     except IndexError:
-                        self._logger.warn('index error in update_table while setting df index')
+                        self._logger.warn(f'index error in update_table ({name}) while setting df index')
             rows, cols = df.shape
             if background:
                 cols = cols-1
+            if forground:
+                cols = cols-1
 
-                colors = df[background]
-                for row in range(rows):
-                    rgb = colors.iloc[row].split(",")
-                    for col in range(cols):
-                        try:
-                            if has_header:
-                                cell = table.cell(row+1,col)
-                            else:
-                                cell = table.cell(row,col)
-                            cell.fill.fore_color.rgb = RGBColor(int(rgb[0]), int(rgb [1]), int(rgb[2]))
-                        except IndexError:
-                            self._logger.warn('index error in update_table while setting background color')
-
-
+            if background:
+                self.set_table_bgcolor(table,df[background],rows,cols,has_header)
+            if forground:
+                try:
+                    self.set_table_font_color(table,df[forground],rows,cols,has_header)
+                except (KeyError):
+                    self._logger.warn(f'error setting forground for {name}')
 
             m = df.values
             for row in range(rows):
@@ -291,7 +342,7 @@ class PowerPoint:
                         run = self.merge_runs(cell.text_frame.paragraphs[0])
                         run.text = text
                     except IndexError:
-                        self._logger.warn('index error in update_table while setting values')
+                        self._logger.warn(f'index error in update_table ({name}) while setting values')
 
     def replace_block(self, begin_tag, end_tag, repl_text):
         for slide in self._prs.slides:
