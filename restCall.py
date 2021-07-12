@@ -1,296 +1,24 @@
+from io import RawIOBase
 from pandas.core.frame import DataFrame
 import requests
 import pandas as pd
-import logging
 import enum
 import urllib.parse
 import numpy as np 
+import json
 
 from requests.auth import HTTPBasicAuth 
 from time import perf_counter, ctime
 from copy import copy
+from logger import Logger
+from logging import DEBUG, INFO, ERROR
 
-class RestCall:
+from restAPI import RestCall
+from aipRestCall import AipRestCall
 
-    _base_url = None
-    _auth = None
-    _time_tracker_df  = pd.DataFrame()
-    _track_time = True
-
-    def __init__(self, base_url, user, password, track_time=False):
-        self._logger = logging.getLogger(__name__)
-        shandler = logging.StreamHandler()
-        formatter = logging.Formatter('%(asctime)s - %(filename)s [%(funcName)30s:%(lineno)-4d] %(levelname)-8s - %(message)s')
-        shandler.setFormatter(formatter)
-        self._logger.addHandler(shandler)
-
-        self._base_url = base_url
-        self._track_time = track_time
-        self._auth = HTTPBasicAuth(user, password)
-        self.setLoggingLevel(logging.INFO)
-
-    def setLoggingLevel(self,level):
-        self._logger.setLevel(level)
-
-    def get(self, url = ""):
-        start_dttm = ctime()
-        start_tm = perf_counter()
-
-        # TODO: Errorhandling
-        headers = {'Accept': 'application/json'}
-        u = urllib.parse.quote(f'{self._base_url}{url}',safe='/:&?=')
-        resp = requests.get(url= u, auth = self._auth, headers=headers)
-
-        # Save the duration, if enabled.
-        if (self._track_time):
-            end_tm = perf_counter()
-            end_dttm = ctime()
-            duration = end_tm - start_tm
-
-            #print(f'Request completed in {duration} ms')
-            self._time_tracker_df = self._time_tracker_df.append({'Application': 'ALL', 'URL': url, 'Start Time': start_dttm \
-                                                        , 'End Time': end_dttm, 'Duration': duration}, ignore_index=True)
-        
-        # TODO: Errorhandling
-
-        return resp.status_code, resp.json()
-
-    def get2(self, url = ""):
-        start_dttm = ctime()
-        start_tm = perf_counter()
-
-        # TODO: Errorhandling
-        
-        headers = {'Accept': '*/*'}
-        u = urllib.parse.quote(f'{self._base_url}{url}',safe='/:&?=')
-        resp = requests.get(url= u, auth = self._auth, headers=headers)
-
-        # Save the duration, if enabled.
-        if (self._track_time):
-            end_tm = perf_counter()
-            end_dttm = ctime()
-            duration = end_tm - start_tm
-
-            #print(f'Request completed in {duration} ms')
-            self._time_tracker_df = self._time_tracker_df.append({'Application': 'ALL', 'URL': url, 'Start Time': start_dttm \
-                                                        , 'End Time': end_dttm, 'Duration': duration}, ignore_index=True)
-        
-        # TODO: Errorhandling
-
-        return resp.status_code, resp.json()
-
-
-#class HLRestCall(RestCall):
-
-
-class AipRestCall(RestCall):
-    _measures = {
-        '60017':'TQI',
-        '60013':'Robustness',
-        '60014':'Efficiency',
-        '60016':'Security',
-        '60011':'Transferability',
-        '60012':'Changeability',
-        '60015':'SEI Maintainability',
-        '66033':'Documentation'
-    }
-
-    _violations = {
-        '67011':'Violation Count',
-        '67012':' per file',
-        '67013':' per kLoC'
-    }
-
-    def get_domain(self, schema_name):
-        domain_id = None
-        (status,json) = self.get()
-        if status == requests.codes.ok:
-            try: 
-                domain_id = list(filter(lambda x:x["schema"].lower()==schema_name.lower(),json))[0]['name']
-            except IndexError:
-                self._logger.error(f'Domain not found for schema {schema_name}')
-                
-        return domain_id
-
-    def get_latest_snapshot(self,domain_id):
-        snapshot = {}
-        (status,json) = self.get(f'{domain_id}/applications/3/snapshots')
-        if status == requests.codes.ok and len(json) > 0:
-            snapshot['id'] = json[0]['href'].split('/')[-1]  
-            snapshot['name'] = json[0]['name']
-            snapshot['technology'] = json[0]['technologies']
-            snapshot['module_href'] = json[0]['moduleSnapshots']['href']
-            snapshot['result_href'] = json[0]['results']['href'] 
-        return snapshot 
-
-    def get_grades_by_technology(self,domain_id,snapshot):
-        first_tech=True
-        grade = pd.DataFrame(columns=list(self._measures.values()))
-        for tech in snapshot['technology']:
-            t={}
-            a={}
-            for key in self._measures: 
-                url = f'{domain_id}/applications/3/results?quality-indicators={key}&technologies={tech}'
-                (status,json) = self.get(url)
-                if status == requests.codes.ok and len(json) > 0:
-                    try:
-                        t[self._measures[key]]=json[0]['applicationResults'][0]['technologyResults'][0]['result']['grade']
-                    except IndexError:
-                        self._logger.warning(f'{domain_id} no grade available for {key} {tech} setting it to 4')
-                        t[self._measures[key]]=4
-
-                    if first_tech==True:
-                        a[self._measures[key]]=json[0]['applicationResults'][0]['result']['grade']
-                else:
-                    self._logger.error (f'Error retrieving technology information:  {url}')
-            if first_tech==True:
-                grade.loc['All'] = a
-            grade.loc[tech] = t
-            first_tech=False
-            
-        return grade
-
-    def get_sizing_by_technology(self,domain_id,snapshot,sizing):
-        first_tech=True
-        size_df = pd.DataFrame(columns=list(sizing.values()))
-        for tech in snapshot['technology']:
-            t={}
-            a={}
-            for key in sizing: 
-                url = f'{domain_id}/applications/3/results?sizing-measures={key}&technologies={tech}'
-                (status,json) = self.get(url)
-                if status == requests.codes.ok and len(json) > 0:
-                    try:
-                        t[sizing[key]]= json[0]['applicationResults'][0]['technologyResults'][0]['result']['value']
-                        if first_tech==True:
-                            a[sizing[key]]=json[0]['applicationResults'][0]['result']['value']
-                    except IndexError:
-                        self._logger.debug(f'{domain_id} no grade available for {key} {tech}')
-            if first_tech==True:
-                size_df.loc['All'] = a
-            size_df.loc[tech] = t
-            first_tech=False
-        return size_df
-
-    def get_distribution_sizing(self, domain_id, metric_id):
-        rslt = DataFrame(columns=['name','value'])
-        (status,json) = self.get(f'{domain_id}/applications/3/results?metrics={metric_id}&select=categories')
-        if status == requests.codes.ok and len(json) > 0:
-            cat = json[0]['applicationResults'][0]['result']['categories']
-            for index, name in enumerate(cat):
-                rslt.loc[name['key']]=[[name['name']],[name['value']]]
-
-        return rslt
-
-    def get_rules(self,domain_id,snapshot_id,business_criteria,critical=True,non_critical=True,start_row=1,max_rows=10000):
-        rslt_df =  pd.DataFrame()
-        critical_arg=non_critical_arg=''
-
-        if critical:
-           critical_arg=f'cc:{business_criteria}' 
-        if non_critical:
-           non_critical_arg=f'nc:{business_criteria}' 
-
-        rule_arg=critical_arg
-        if len(rule_arg) > 0:
-            rule_arg = rule_arg + ','
-        rule_arg=f'{rule_arg}{non_critical_arg}'
-
-        url = f'{domain_id}/applications/3/snapshots/{snapshot_id}/violations?rule-pattern={rule_arg}&startRow={start_row}&nbRows={max_rows}'
-        (status,json) = self.get(url)
-        if status == requests.codes.ok and len(json) > 0:
-            rslt_df = pd.DataFrame(json)
-        return rslt_df
-
-
-    def get_action_plan(self,domain_id,snapshot_id):
-        business_criteria = ['Robustness','Efficiency','Security','Transferability','Changeability']
-    
-        catagory = ''
-        tech_criteria = ''
-        rslt_df =  pd.DataFrame()
-        ap_summary_df =  pd.DataFrame()
-        url = f'{domain_id}/applications/3/snapshots/{snapshot_id}/action-plan/issues?startRow=1&nbRows=100000'
-        (status,json) = self.get(url)
-        if status == requests.codes.ok and len(json) > 0:
-            rslt_df = pd.DataFrame(json)
-            rule_pattern = pd.json_normalize(rslt_df['rulePattern']).add_prefix('rule.')
-            rule_pattern['rule.href'] = rule_pattern['rule.href'].str.split('/').str[-1]
-            rule_pattern = rule_pattern.rename(columns={"rule.href":"rule.id"})
-
-            component = pd.json_normalize(rslt_df['component']).add_prefix('component.') 
-            component.drop(component.columns.difference(['component.name','component.shortName']),1,inplace=True)
-
-            remediation = pd.json_normalize(rslt_df['remedialAction']) 
-            rslt_df = rule_pattern.join([component,remediation])                                                  
-
-            rslt_df.insert(3,'Business Criteria','')
-            rslt_df.insert(3,'tech_criteria','')
-
-            save_rule_id = ''
-            for key, value in rslt_df.iterrows():
-                rule_id=value['rule.id']
-                if save_rule_id != rule_id:
-                    save_rule_id = rule_id
-                    url = f'{domain_id}/quality-indicators/{rule_id}/snapshots/{snapshot_id}'
-                    (status,json) = self.get(url)
-                    if status == requests.codes.ok and len(json) > 0:
-                        catagory = ''
-                        tech_criteria = ''
-                        for g1 in json['gradeAggregators']:
-                            tech_criteria = g1['name']
-                            for g2 in g1['gradeAggregators']:
-                                if g2['name'] in business_criteria:
-                                    catagory = catagory + g2['name'] + ', '
-                
-                rslt_df.loc[key,'tech_criteria']=tech_criteria
-                rslt_df.loc[key,'Business Criteria']=catagory[:-2]
-
-            rslt_df = rslt_df.sort_values(by=['rule.id'])
-            ap_summary_df = rslt_df.groupby(['rule.name']).count()
-            business = pd.DataFrame(rslt_df,columns=['rule.name','tech_criteria','Business Criteria','tag','comment']).drop_duplicates()
-            ap_summary_df.drop(ap_summary_df.columns.difference(['rule.name','component.name']),1,inplace=True)
-            ap_summary_df = pd.merge(ap_summary_df,business, on='rule.name')
-            ap_summary_df = ap_summary_df[['rule.name','Business Criteria','component.name','comment','tag','tech_criteria']]
-            ap_summary_df = ap_summary_df.rename(columns={'component.name':'No. of Actions',
-                                                          'rule.name':'Quality Rule',
-                                                          'tech_criteria':'Technical Criteria'
-                                                          })
-
-            rslt_df = rslt_df.rename(columns={'rule.name':'Rule Name',
-                                              'comment':'Action Plan Priority',
-                                              'component.name':'Object Name Location'})
-            rslt_df = rslt_df[['Action Plan Priority','Rule Name','Object Name Location','rule.id']]
-        return (rslt_df, ap_summary_df)
-
-    def getLOC(self,domain_id):
-        loc = 0
-        (status,json) = self.get(f'{domain_id}/applications/3/results?sizing-measures=10151&snapshots=-1')
-        if status == requests.codes.ok and len(json) > 0:
-            loc = json[0]['applicationResults'][0]['result']['value']
-        return loc
-
-    def get_sizing(self, domain_id, input):
-        rslt = {}
-        for key in input: 
-            (status,json) = self.get(f'{domain_id}/applications/3/results?sizing-measures={key}&snapshots=-1')
-            if status == requests.codes.ok and len(json) > 0:
-                rslt[input[key]]=json[0]['applicationResults'][0]['result']['value']
-        return rslt
-
-    def get_violation_CR(self,domain_id):
-        vs = self.get_sizing(domain_id,self._violations) 
-        complexity = self.get_distribution_sizing(domain_id,'67001')
-        vs['Complex objects']=complexity.loc['67002']['value'][0]+complexity.loc['67003']['value'][0]
-        complexity = self.get_distribution_sizing(domain_id,'67030')
-        vs[' With violations']=complexity.loc['67031']['value'][0]+complexity.loc['67032']['value'][0]
-        return vs
-
-
-class AipData():
+class AipData(AipRestCall):
     _data={}
     _base=[]
-    _rest=None
 
     _sizing = {
        '10151':'Number of Code Lines', 
@@ -309,28 +37,30 @@ class AipData():
 
     _health_grade_ids = ['Efficiency','Robustness','Security','Changeability','Transferability']
 
-    def __init__(self, rest, project, schema):
-        self._rest=rest
-        self._base=schema
-        for s in schema:
-            print (f'Collecting data for {s}')
+    def __init__(self, base_url,user,pswd, app_list, timer_on=False):
+        super().__init__(base_url, user, pswd, timer_on)
+
+        #self._rest=rest
+        self._base=app_list
+        for s in app_list:
+            self.info(f'Collecting AIP data for {s}')
             self._data[s]={}
             self._data[s]['has data'] = False
             central_schema = f'{s}_central'
-            domain_id = rest.get_domain(central_schema)
+            domain_id = self.get_domain(central_schema)
             if domain_id is not None:
                 self._data[s]['domain_id']=domain_id
-                self._data[s]['snapshot']=rest.get_latest_snapshot(domain_id)
+                self._data[s]['snapshot']=self.get_latest_snapshot(domain_id)
                 if self._data[s]['snapshot']:
                     self._data[s]['has data'] = True
-                    self._data[s]['grades']=rest.get_grades_by_technology(domain_id,self._data[s]['snapshot'])
-                    self._data[s]['sizing']=rest.get_sizing_by_technology(domain_id,self._data[s]['snapshot'],self._sizing)
-                    self._data[s]['loc_sizing']=rest.get_sizing(domain_id,self._sizing) 
-                    self._data[s]['tech_sizing']=rest.get_sizing(domain_id,self._tech_sizing) 
-                    self._data[s]['violation_sizing']=rest.get_violation_CR(domain_id)
-                    self._data[s]['critical_rules']=rest.get_rules(domain_id,self._data[s]['snapshot']['id'],60017,non_critical=False)
+                    self._data[s]['grades']=self.get_grades_by_technology(domain_id,self._data[s]['snapshot'])
+                    self._data[s]['sizing']=self.get_sizing_by_technology(domain_id,self._data[s]['snapshot'],self._sizing)
+                    self._data[s]['loc_sizing']=self.get_sizing(domain_id,self._sizing) 
+                    self._data[s]['tech_sizing']=self.get_sizing(domain_id,self._tech_sizing) 
+                    self._data[s]['violation_sizing']=self.get_violation_CR(domain_id)
+                    self._data[s]['critical_rules']=self.get_rules(domain_id,self._data[s]['snapshot']['id'],60017,non_critical=False)
 
-                    (ap_df,ap_summary_df) = rest.get_action_plan(domain_id,self._data[s]['snapshot']['id']) 
+                    (ap_df,ap_summary_df) = self.get_action_plan(domain_id,self._data[s]['snapshot']['id']) 
                     self._data[s]['action_plan']=ap_df
                     self._data[s]['action_plan_summary']=ap_summary_df
             else:
@@ -476,21 +206,21 @@ class HLRestCall(RestCall):
     """
     Class to handle HL REST API calls.
     """
-    def __init__(self, hl_base_url, hl_user, hl_pswd, hl_instance, timer_on):
-        super(HLRestCall, self).__init__(hl_base_url, hl_user, hl_pswd, timer_on)
+    def __init__(self, hl_base_url, hl_user, hl_pswd, hl_instance, timer_on=False):
+        super().__init__(hl_base_url, hl_user, hl_pswd, timer_on)
 
         self._hl_instance = hl_instance
         self._hl_data_retrieved = False
     
     def _get_app_ids(self, instance_id):
-        # Reeetrieve the HL app id for the application.
+        # Retrieve the HL app id for the application.
 
         try:
             # TODO: remove the hard-coding
             # TODO: Get the app id.
             url = f'domains/{instance_id}/applications'
 
-            (status, json) = self.get2(url)
+            (status, json) = self.get(url,headers={'Accept': '*/*'})
 
             # TODO: Handle exceptions
             if status == requests.codes.ok and len(json) > 0:
@@ -502,54 +232,202 @@ class HLRestCall(RestCall):
 
         return json
 
-    def _get_third_party(self, app_id):
-        try:
-            # TODO: remove the hard-coding
-            # TODO: Get the app id.
-            url = f'domains/{self._hl_instance}/applications/{app_id}/thirdparty'
+    def get_app_id(self,app_name):
+        url = f'domains/{self._hl_instance}/applications/'
+        (status, json) = self.get(url)
 
-            (status, json) = self.get(url)
+        # TODO: Handle exceptions
+        if status == requests.codes.ok and len(json) > 0:
+            for id in json:
+                if id['name'].lower()==app_name.lower():
+                    return id['id']
+            raise KeyError ('Application not found')
 
-            # TODO: Handle exceptions
-            if status == requests.codes.ok and len(json) > 0:
-                # TODO: TEMP
-                for i in range(len(json['thirdParties'])):
-                    # Fill-in the blanks. Not every third party entry has CVE and license info.
-                    # If not found, create a blank entry for ease in moving the data over to a dataframe.
+    def get_third_party(self, app_id):
+        cves = pd.DataFrame()
+        lic = pd.DataFrame()
 
-                    json['thirdParties'][i]['cve'] = json['thirdParties'][i].get('cve', np.nan)
-                    json['thirdParties'][i]['licenses'] = json['thirdParties'][i].get('licenses', np.nan)
+        url = f'domains/{self._hl_instance}/applications/{app_id}/thirdparty'
+        (status, json) = self.get(url)
 
-                    #print('j:', j)
-                    #print('json:', json['thirdParties'][i]['cve'], json['thirdParties'][i]['licenses'])
+        third_party = []
+        if status == requests.codes.ok and len(json) > 0:
+            third_party = json['thirdParties']
+            for tp in third_party:
+                if 'cve' in tp:
+                    cve_df = pd.json_normalize(tp['cve']['vulnerabilities'])
+                    cve_df.rename(columns={'name':'cve'},inplace=True)
+                    
+                    cve_df['component']=tp['name']
+                    cve_df['version']=tp['version']
+                    cve_df['languages']=tp['languages']
+                    cve_df['release']=tp['release']
+                    cve_df['origin']=tp['origin']
+                    cve_df['lastVersion']=tp['lastVersion']
 
-                return json
-        except:
-            # TODO
-            print('Oopsi.. caught an exception')
-            raise
+                    cves=pd.concat([cves,cve_df],ignore_index=True)
 
+                if 'licenses' in tp:
+                    lic_df = pd.json_normalize(tp['licenses'])
+                    lic_df.rename(columns={'name':'license'},inplace=True)
+                    lic_df['component']=tp['name']
+                    lic_df['version']=tp['version']
+                    lic_df['languages']=tp['languages']
+                    lic_df['release']=tp['release']
+                    lic_df['origin']=tp['origin']
+                    lic_df['lastVersion']=tp['lastVersion']
+                    lic=pd.concat([lic,lic_df],ignore_index=True)
+
+            if 'component' in cves.columns:
+                cves=cves[['component','version','languages','release','origin','lastVersion','cve', 'description', 'cweId', 'cweLabel', 'criticity', 'cpe']]
+            if 'component' in lic.columns:
+                lic=lic[['component','version','languages','release','origin','lastVersion','license','compliance']] 
+
+        return lic,cves,len(third_party)
+
+
+"""
+"""
 class HLData(HLRestCall):
-    """
-    """
-    def __init__(self, rest, project, schema):
-        self._rest = rest
-        self._base = schema
-        self._data_retrieved = False
-        self._app_id = None
-        self._got_data = False
-        self._has_crit_sev_cves = False
-        self._has_high_sev_cves = False
-        self._has_med_sev_cves = False
-        self._has_high_risk_lics = False
-        self._has_med_risk_lics = False
-        self._third_party_df = pd.DataFrame()
-        self._cve_df = pd.DataFrame()
-        self._lic_df = pd.DataFrame()
+    _data={}
+
+    def __init__(self, hl_base_url, hl_user, hl_pswd, hl_instance, app_list, app_translate_list, timer_on=False):
+        super().__init__(hl_base_url, hl_user, hl_pswd, hl_instance, timer_on)
+
+        for s in app_list:
+            hl_app_name=app_translate_list[s]
+            self.info(f'Collecting Highlight data for {s}({hl_app_name})')
+            self._data[s]={}
+            self._data[s]['has data'] = False
+
+            app_id = self.get_app_id(hl_app_name)
+            if app_id:
+                (lic,cves,total_components) = self.get_third_party(app_id)
+
+                self._data[s]['app_id']=app_id
+                self._data[s]['cves']=cves
+                self._data[s]['cve_crit_tot']=len(cves[cves['criticity']=='CRITICAL']['cve'].unique())
+                self._data[s]['cve_high_tot']=len(cves[cves['criticity']=='HIGH']['cve'].unique())
+                self._data[s]['cve_med_tot']=len(cves[cves['criticity']=='MEDIUM']['cve'].unique())
+                self._data[s]['lic_high_tot']=len(lic[lic['compliance']=='low']['component'].unique())
+                self._data[s]['lic_med_tot']=len(lic[lic['compliance']=='medium']['component'].unique())
+
+                self._data[s]['licenses']=lic
+                self._data[s]['total_components']=total_components
+            else:
+                self.error('Highlight Application Id not found for {hl_app_name}')    
+        #    self._base = schema
+            self._data_retrieved = False
+            self._app_id = None
+            self._got_data = False
+            self._has_crit_sev_cves = False
+            self._has_high_sev_cves = False
+            self._has_med_sev_cves = False
+            self._has_high_risk_lics = False
+            self._has_med_risk_lics = False
+            self._third_party_df = pd.DataFrame()
+            self._cve_df = pd.DataFrame()
+            self._lic_df = pd.DataFrame()
+
+    def get_cve_crit_tot(self,app_id):
+        return self._data[app_id]['cve_crit_tot']
+
+    def get_cve_high_tot(self,app_id):
+        return self._data[app_id]['cve_high_tot']
+
+    def get_cve_med_tot(self,app_id):
+        return self._data[app_id]['cve_med_tot']
+
+    def get_lic_high_tot(self,app_id):
+        return self._data[app_id]['lic_high_tot']
+
+    def get_lic_med_tot(self,app_id):
+        return self._data[app_id]['lic_med_tot']
+
+    def get_oss_cmpn_tot(self,app_id):
+        return self._data[app_id]['total_components']
+        
+
+    def get_third_party_info(self,app_id):
+        return DataFrame(self._data[app_id]['components'])
+
+    def get_lic_info(self,app_name):
+        """
+            Extract all license relavent columns from the components DF 
+        """
+        lic = self._data[app_name]['licenses']
+
+        #adjust license risk factors
+        lic.loc[lic['compliance']=='medium','compliance']='Medium'
+        lic.loc[lic['compliance']=='low','compliance']='High'
+        
+        return lic
+
+    def get_cve_info(self,app_name):
+        """
+            Extract all license relavent columns from the components DF 
+        """
+        cves = self._data[app_name]['cves']
+
+        oss_work_df = cves[['component','cve','criticity']].copy()
+        oss_work_df.drop_duplicates(['component','cve','criticity'],inplace=True)
+        oss_work_df.sort_values(by=['component'],inplace=True)
+
+        cve_critical_df = oss_work_df[oss_work_df['criticity']=='CRITICAL']
+        cve_critical_df = cve_critical_df.groupby('component')['cve'].apply(', '.join).reset_index()
+        cve_critical_df.rename(columns={'cve':'critical'},inplace=True)
+
+        cve_high_df = oss_work_df[oss_work_df['criticity']=='HIGH']
+        cve_high_df = cve_high_df.groupby('component')['cve'].apply(', '.join).reset_index()
+        cve_high_df.rename(columns={'cve':'high'},inplace=True)
+
+        cve_medium_df = oss_work_df[oss_work_df['criticity']=='MEDIUM']
+        cve_medium_df = cve_medium_df.groupby('component')['cve'].apply(', '.join).reset_index()
+        cve_medium_df.rename(columns={'cve':'medium'},inplace=True)
+
+        oss_df = cve_critical_df.merge(cve_high_df,on='component',how='outer')
+        oss_df = oss_df.merge(cve_medium_df,on='component',how='outer')
+        oss_df = oss_df.where(pd.notnull(oss_df),'')
+
+
+        return oss_df
+
+
+
+        # lic = pd.json_normalize(components,
+        #                         record_path =['licenses'],
+        #                         meta=['componentId','name','version','release',
+        #                               'languages','lastVersion','lastRelease',
+        #                               'nbVersionPreviousYear'],
+        #                         meta_prefix='comp.',
+        #                         errors='ignore')
+
+        # lic=lic[['comp.componentId', 'comp.name', 'comp.version',
+        #     'comp.release', 'comp.languages', 'comp.lastVersion',
+        #     'comp.lastRelease', 'comp.nbVersionPreviousYear','name', 'compliance']]
+
+        # lic.rename(columns={'name':'lic.name','compliance':'compliance'},inplace=True)
+
+        # #adjust license risk factors
+        # lic.loc[lic['compliance']=='high','compliance']='Low'
+        # lic.loc[lic['compliance']=='medium','compliance']='Medium'
+        
+        # return lic
+
+    def sort_lic_info(self, lic_df):
+        lic_all = lic_df
+        lic_all.sort_values(by=['component','release'],inplace=True)
+        lic_high = lic_all[lic_all['compliance']=="High"]
+        lic_medium = lic_all[lic_all['compliance']=="Medium"]
+        # lic_low = lic_all[lic_all['compliance']=="Low"]
+        # lic_undefined = lic_all[lic_all['compliance']==""]
+#        return pd.concat([lic_high,lic_medium,lic_low,lic_undefined])
+        return pd.concat([lic_high,lic_medium])
+
 
     def get_app_ids(self, instance_id):
         # TODO: try-except
-        return self._rest._get_app_ids(instance_id)
+        return self._get_app_ids(instance_id)
 
     def _get_third_party(self, app_id):
 
@@ -560,7 +438,7 @@ class HLData(HLRestCall):
         if not self._got_data:
             # If we do not have the data already for this app, retrieve it first.
 
-            self._third_party_df = pd.DataFrame(self._rest._get_third_party(app_id)['thirdParties'])
+            self._third_party_df = pd.DataFrame(self.get_third_party(app_id)['thirdParties'])
             # TODO: Confirm that data was retrieved before setting this to True
             self._got_data = True
 
@@ -571,7 +449,7 @@ class HLData(HLRestCall):
 
         return
 
-    def get_cves(self, app_id, type, limit = 0):
+    def get_cves(self, components, type, limit = 0):
         """
         Returns CVE info for a give app, if there are Critical, High and medium CVEs.
         Unless the 'all' argument is provided, High CVEs are returned only when there are no/not enough critical CVEs
@@ -590,11 +468,15 @@ class HLData(HLRestCall):
         # Do we have the data retrieved for the app? If not, auto-retrieve.
         # If all == False, limit the number of CVEs returned.
 
-        try:
-            self._get_third_party(app_id)
-        except:
-            print('ERROR - no thirdparty data')
-            raise
+        # try:
+        #     self._get_third_party(app_id)
+        # except:
+        #     print('ERROR - no thirdparty data')
+        #     raise
+
+        cve_df = components.loc[:, ['name', 'cve']]
+        cve_df.dropna(axis = 0, how = 'any', inplace = True)
+
 
         i = 0
         prev_comp = ''
