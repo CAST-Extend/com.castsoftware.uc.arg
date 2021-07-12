@@ -241,7 +241,7 @@ class HLRestCall(RestCall):
             for id in json:
                 if id['name'].lower()==app_name.lower():
                     return id['id']
-            raise KeyError ('Application not found')
+            raise KeyError (f'Application not found')
 
     def get_third_party(self, app_id):
         cves = pd.DataFrame()
@@ -315,7 +315,7 @@ class HLData(HLRestCall):
                 self._data[s]['licenses']=lic
                 self._data[s]['total_components']=total_components
             else:
-                self.error('Highlight Application Id not found for {hl_app_name}')    
+                self.error(f'Highlight Application Id not found for {hl_app_name}')    
         #    self._base = schema
             self._data_retrieved = False
             self._app_id = None
@@ -386,9 +386,10 @@ class HLData(HLRestCall):
         cve_medium_df.rename(columns={'cve':'medium'},inplace=True)
 
         oss_df = cve_critical_df.merge(cve_high_df,on='component',how='outer')
+#        oss_df = oss_df.merge(cve_high_df,on='component',how='outer')
         oss_df = oss_df.merge(cve_medium_df,on='component',how='outer')
         oss_df = oss_df.where(pd.notnull(oss_df),'')
-
+        oss_df = oss_df[['component','critical','high','medium']]
 
         return oss_df
 
