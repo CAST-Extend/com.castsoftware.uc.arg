@@ -16,6 +16,9 @@ from logging import DEBUG, INFO, ERROR
 from restAPI import RestCall
 from aipRestCall import AipRestCall
 
+"""
+    This class is used to retrieve information from the CAST AIP REST API
+"""
 class AipData(AipRestCall):
     _data={}
     _base=[]
@@ -289,6 +292,7 @@ class HLRestCall(RestCall):
 
 
 """
+
 """
 class HLData(HLRestCall):
     _data={}

@@ -19,8 +19,6 @@ import math
 import argparse
 import json
 
-MAX_LICS_PER_SLIDE = 12
-MAX_CVES_PER_SLIDE = 12
 class GeneratePPT(Logger):
     _app_list = []
     _ppt = None
