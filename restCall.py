@@ -48,6 +48,8 @@ class AipData(AipRestCall):
             self._data[s]['has data'] = False
             central_schema = f'{s}_central'
             domain_id = self.get_domain(central_schema)
+            if domain_id == -1:
+                raise SystemExit  #connection failed, exit here
             if domain_id is not None:
                 self._data[s]['domain_id']=domain_id
                 self._data[s]['snapshot']=self.get_latest_snapshot(domain_id)
@@ -64,7 +66,7 @@ class AipData(AipRestCall):
                     self._data[s]['action_plan']=ap_df
                     self._data[s]['action_plan_summary']=ap_summary_df
             else:
-                raise ValueError(f'Domain not found for {s}')
+                self.logger.warn(f'Domain not found for {s}')
 
     def has_data(self, app):
         return self._data[app]['has data']
@@ -306,13 +308,23 @@ class HLData(HLRestCall):
 
                 self._data[s]['app_id']=app_id
                 self._data[s]['cves']=cves
-                self._data[s]['cve_crit_tot']=len(cves[cves['criticity']=='CRITICAL']['cve'].unique())
-                self._data[s]['cve_high_tot']=len(cves[cves['criticity']=='HIGH']['cve'].unique())
-                self._data[s]['cve_med_tot']=len(cves[cves['criticity']=='MEDIUM']['cve'].unique())
-                self._data[s]['lic_high_tot']=len(lic[lic['compliance']=='low']['component'].unique())
-                self._data[s]['lic_med_tot']=len(lic[lic['compliance']=='medium']['component'].unique())
-
                 self._data[s]['licenses']=lic
+
+                if cves.empty:
+                    self._data[s]['cve_crit_tot']=0
+                    self._data[s]['cve_high_tot']=0
+                    self._data[s]['cve_med_tot']=0
+                else:
+                    self._data[s]['cve_crit_tot']=len(cves[cves['criticity']=='CRITICAL']['cve'].unique())
+                    self._data[s]['cve_high_tot']=len(cves[cves['criticity']=='HIGH']['cve'].unique())
+                    self._data[s]['cve_med_tot']=len(cves[cves['criticity']=='MEDIUM']['cve'].unique())
+                if lic.empty:
+                    self._data[s]['lic_high_tot']=0
+                    self._data[s]['lic_med_tot']=0
+                else:
+                    self._data[s]['lic_high_tot']=len(lic[lic['compliance']=='low']['component'].unique())
+                    self._data[s]['lic_med_tot']=len(lic[lic['compliance']=='medium']['component'].unique())
+
                 self._data[s]['total_components']=total_components
             else:
                 self.error(f'Highlight Application Id not found for {hl_app_name}')    
@@ -358,8 +370,17 @@ class HLData(HLRestCall):
         lic = self._data[app_name]['licenses']
 
         #adjust license risk factors
-        lic.loc[lic['compliance']=='medium','compliance']='Medium'
-        lic.loc[lic['compliance']=='low','compliance']='High'
+        if lic is None:
+            lic = DataFrame()
+        else:
+            try:
+                lic.loc[lic['compliance']=='medium','compliance']='Medium'
+            except (KeyError):
+                self.logger.info(f'no medium risk licenses for {app_name}')
+            try:
+                lic.loc[lic['compliance']=='low','compliance']='High'
+            except (KeyError):
+                self.logger.info(f'no high risk licenses for {app_name}')
         
         return lic
 
@@ -368,28 +389,31 @@ class HLData(HLRestCall):
             Extract all license relavent columns from the components DF 
         """
         cves = self._data[app_name]['cves']
+        oss_df = DataFrame(columns=['component','critical','high','medium'])
 
-        oss_work_df = cves[['component','cve','criticity']].copy()
-        oss_work_df.drop_duplicates(['component','cve','criticity'],inplace=True)
-        oss_work_df.sort_values(by=['component'],inplace=True)
+        if cves is not None and not cves.empty:
 
-        cve_critical_df = oss_work_df[oss_work_df['criticity']=='CRITICAL']
-        cve_critical_df = cve_critical_df.groupby('component')['cve'].apply(', '.join).reset_index()
-        cve_critical_df.rename(columns={'cve':'critical'},inplace=True)
+            oss_work_df = cves[['component','cve','criticity']].copy()
+            oss_work_df.drop_duplicates(['component','cve','criticity'],inplace=True)
+            oss_work_df.sort_values(by=['component'],inplace=True)
 
-        cve_high_df = oss_work_df[oss_work_df['criticity']=='HIGH']
-        cve_high_df = cve_high_df.groupby('component')['cve'].apply(', '.join).reset_index()
-        cve_high_df.rename(columns={'cve':'high'},inplace=True)
+            cve_critical_df = oss_work_df[oss_work_df['criticity']=='CRITICAL']
+            cve_critical_df = cve_critical_df.groupby('component')['cve'].apply(', '.join).reset_index()
+            cve_critical_df.rename(columns={'cve':'critical'},inplace=True)
 
-        cve_medium_df = oss_work_df[oss_work_df['criticity']=='MEDIUM']
-        cve_medium_df = cve_medium_df.groupby('component')['cve'].apply(', '.join).reset_index()
-        cve_medium_df.rename(columns={'cve':'medium'},inplace=True)
+            cve_high_df = oss_work_df[oss_work_df['criticity']=='HIGH']
+            cve_high_df = cve_high_df.groupby('component')['cve'].apply(', '.join).reset_index()
+            cve_high_df.rename(columns={'cve':'high'},inplace=True)
 
-        oss_df = cve_critical_df.merge(cve_high_df,on='component',how='outer')
-#        oss_df = oss_df.merge(cve_high_df,on='component',how='outer')
-        oss_df = oss_df.merge(cve_medium_df,on='component',how='outer')
-        oss_df = oss_df.where(pd.notnull(oss_df),'')
-        oss_df = oss_df[['component','critical','high','medium']]
+            cve_medium_df = oss_work_df[oss_work_df['criticity']=='MEDIUM']
+            cve_medium_df = cve_medium_df.groupby('component')['cve'].apply(', '.join).reset_index()
+            cve_medium_df.rename(columns={'cve':'medium'},inplace=True)
+
+            oss_df = cve_critical_df.merge(cve_high_df,on='component',how='outer')
+    #        oss_df = oss_df.merge(cve_high_df,on='component',how='outer')
+            oss_df = oss_df.merge(cve_medium_df,on='component',how='outer')
+            oss_df = oss_df.where(pd.notnull(oss_df),'')
+            oss_df = oss_df[['component','critical','high','medium']]
 
         return oss_df
 
@@ -416,14 +440,17 @@ class HLData(HLRestCall):
         # return lic
 
     def sort_lic_info(self, lic_df):
-        lic_all = lic_df
-        lic_all.sort_values(by=['component','release'],inplace=True)
-        lic_high = lic_all[lic_all['compliance']=="High"]
-        lic_medium = lic_all[lic_all['compliance']=="Medium"]
-        # lic_low = lic_all[lic_all['compliance']=="Low"]
-        # lic_undefined = lic_all[lic_all['compliance']==""]
-#        return pd.concat([lic_high,lic_medium,lic_low,lic_undefined])
-        return pd.concat([lic_high,lic_medium])
+        if lic_df is None:
+            return lic_df
+        else:
+            lic_all = lic_df
+            try:
+                lic_all.sort_values(by=['component','release'],inplace=True)
+                lic_high = lic_all[lic_all['compliance']=="High"]
+                lic_medium = lic_all[lic_all['compliance']=="Medium"]
+                return pd.concat([lic_high,lic_medium])
+            except (KeyError):
+                return lic_df
 
 
     def get_app_ids(self, instance_id):
