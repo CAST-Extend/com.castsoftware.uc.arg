@@ -155,24 +155,31 @@ class GeneratePPT(Logger):
             app_id = self._app_list[app_no]
             self._ppt.replace_text(f'{{app{app_no+1}_name}}',self._appl_title[app_id])
 
-            extrm_effort = 0
-            extrm_vio_cnt = 0
-            extrm_vio_amt = 0
-            extrm_violation_business_txt = ''
+            fix_now_eff = fix_now_cost = fix_now_vio_cnt = 0
+            fix_now_data = DataFrame()
+            fix_now_bus_txt = ''
+            fix_now_vio_txt = ''
 
-            high_effort = 0
-            high_vio_cnt = 0
-            high_vio_amt = 0
-            high_violation_business_txt = ''
+            near_term_eff = near_term_cost = near_term_vio_cnt = 0
+            near_term_data = DataFrame()
+            near_term_bus_txt = ''
+            near_term_vio_txt = ''
 
-            crit_cve = 0
+            med_eff = med_cost = med_vio_cnt = 0
+            med_data = DataFrame()
+            med_bus_txt = ''
+            med_vio_txt = ''
 
-            summary_days = 0
-            summary_cost = 0.0
-            summary_total_cost = 0.0
+            long_term_eff = long_term_cost = long_term_vio_cnt = 0
+            long_term_data = DataFrame()
+            long_term_bus_txt = ''
+            long_term_vio_txt = ''
 
-            fix_now_days = 0
-            fix_now_cost = 0.0
+            summary_eff = summary_cost = summary_vio_cnt = 0
+            summary_data = DataFrame()
+            summary_bus_txt = ''
+            summary_vio_txt = ''
+            summary_total_cost = 0
 
             if self._generate_AIP:
                 if self._aip_data.has_data(app_id):
@@ -234,71 +241,47 @@ class GeneratePPT(Logger):
 
 
                     """
-                        Get Action Plan data
-                    """
-                    ap.fill_action_plan(app_no)
-                    self.fill_violations(app_no)
-
-                    (extrm_effort, extrm_cost, extrm_vio_cnt, extrm_data) = \
-                        ap.get_extreme_costing()
-
-                    (high_effort, high_cost, high_vio_cnt, high_data) = \
-                        ap.get_high_costing()
-
-                    (med_effort, med_cost, med_vio_cnt, med_data) = \
-                        ap.get_med_costing()
-
-                    (low_effort, low_cost, low_vio_cnt, low_data) = \
-                        ap.get_low_costing()
-
-                    """
-                        Now combine it for the various slide combinations
+                        Get Action Plan data and combine it for the various slide combinations
 
                         Executive Summary uses a combination of extreme and high violation data
                         Action Plan midigation slice is divided into three sections
                             1. Fix before sigining contains only extreme violation data
-                            2. Near term contains high and medium violation data
-                            3. Long term contains low violation data
+                            2. Near term contains high violation data
+                            3. Long term contains medium and low violation data
+                            4. Excecutive Summary contains fix now and high violation data
                     """
-                    #Executive Summary Side
-                    summary_data = pd.concat([extrm_data,high_data],ignore_index=True)
-                    summary_business_txt = util.list_to_text(ap.business_criteria(summary_data))
-                    summary_days = int(extrm_effort) + int(high_effort)
-                    summary_cost = float(extrm_cost) + float(high_cost)
-                    summary_vio_cnt = int(extrm_vio_cnt) + int(high_vio_cnt)
-                    
-                    self._ppt.replace_text(f'{{app{app_no+1}_summary_vio_cnt}}',summary_vio_cnt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_summary_bus_text}}',summary_business_txt)
+                    ap.fill_action_plan(app_no)
+                    self.fill_violations(app_no)
 
-                    # Action Plan mitigation slide
-                    fix_now_business_txt = util.list_to_text(ap.business_criteria(extrm_data))
-                    fix_now_days = extrm_effort
-                    fix_now_cost = extrm_cost
-                    fix_now_vio_cnt = extrm_vio_cnt
+                    (fix_now_eff, fix_now_cost, fix_now_vio_cnt, fix_now_data) = \
+                        ap.get_extreme_costing()
+                    fix_now_bus_txt = util.list_to_text(ap.business_criteria(fix_now_data))
+                    fix_now_vio_txt = ap.list_violations(fix_now_data)
+                        
 
-                    self._ppt.replace_text(f'{{app{app_no+1}_fix_now_bus_crit}}',fix_now_business_txt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_fix_now_vio_cnt}}',fix_now_vio_cnt)
-
-                    near_term_data = pd.concat([high_data,med_data],ignore_index=True)
+                    (near_term_eff, near_term_cost, near_term_vio_cnt, near_term_data) = \
+                        ap.get_high_costing()
                     near_term_bus_txt = util.list_to_text(ap.business_criteria(near_term_data))
-                    near_term_days = int(high_effort) + int(med_effort)
-                    near_term_cost = float(high_cost) + float(med_cost)
-                    near_term_vio_cnt = int(high_vio_cnt) + int(med_vio_cnt)
                     near_term_vio_txt = ap.list_violations(near_term_data)
 
-                    self._ppt.replace_text(f'{{app{app_no+1}_near_term_bus_txt}}',near_term_bus_txt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_near_term_vio_cnt}}',near_term_vio_cnt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_near_term_vio_text}}',near_term_vio_txt)
+                    (med_eff, med_cost, med_vio_cnt, med_data) = ap.get_med_costing()
+                    med_bus_txt = util.list_to_text(ap.business_criteria(med_data))
+                    med_vio_txt = ap.list_violations(med_data)
 
-                    long_term_bus_txt = util.list_to_text(ap.business_criteria(low_data))
-                    long_term_days = low_effort
-                    long_term_cost = low_cost
-                    long_term_vio_cnt = low_vio_cnt
-                    long_term_vio_txt = ap.list_violations(low_data)
+                    (low_eff, low_cost, low_vio_cnt, low_data) = ap.get_low_costing()
+                    long_term_data = pd.concat([low_data,med_data],ignore_index=True)
+                    long_term_bus_txt = util.list_to_text(ap.business_criteria(long_term_data))
+                    long_term_vio_txt = ap.list_violations(long_term_data)
+                    long_term_eff = int(med_eff) + int(low_eff)
+                    long_term_cost = float(med_cost) + float(low_cost)
+                    long_term_vio_cnt = int(med_vio_cnt) + int(low_vio_cnt)
 
-                    self._ppt.replace_text(f'{{app{app_no+1}_long_term_bus_text}}',long_term_bus_txt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_long_term_vio_cnt}}',long_term_vio_cnt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_long_term_vio_text}}',long_term_vio_txt)
+                    summary_data = pd.concat([fix_now_data,near_term_data],ignore_index=True)
+                    summary_bus_txt = util.list_to_text(ap.business_criteria(summary_data))
+                    summary_vio_txt = ap.list_violations(summary_data)
+                    summary_eff = int(fix_now_eff) + int(near_term_eff)
+                    summary_cost = float(fix_now_cost) + float(near_term_cost)
+                    summary_vio_cnt = int(fix_now_vio_cnt) + int(near_term_vio_cnt)
 
 
             #replaceHighlight application specific data
@@ -351,118 +334,58 @@ class GeneratePPT(Logger):
 
                 self._ppt.update_table(f'app{app_no+1}_HL_table_CVEs',oss_df,include_index=False)
 
-                crit_cve_days = math.ceil(crit_cve/5)
-                crit_cve_cost = crit_cve_days * ap._day_rate /1000
+                if crit_cve is None:
+                    crit_cve_eff = 0
+                    crit_cve_cost = 0
+                else:
+                    crit_cve_eff = math.ceil(crit_cve/5)
+                    crit_cve_cost = crit_cve_eff * ap._day_rate /1000
 
-                high_cve_days = math.ceil(high_cve/5)
-                high_cve_cost = high_cve_days * ap._day_rate /1000
+                if high_cve is None:
+                    high_cve_eff = 0
+                    high_cve_cost = 0
+                else:
+                    high_cve_eff = math.ceil(high_cve/5)
+                    high_cve_cost = high_cve_eff * ap._day_rate /1000
 
-                med_cve_days = math.ceil(med_cve/5)
-                med_cve_cost = med_cve_days * ap._day_rate /1000
+                if high_cve is None:
+                    med_cve_days = 0
+                    med_cve_cost = 0
+                else:   
+                    med_cve_days = math.ceil(med_cve/5)
+                    med_cve_cost = med_cve_days * ap._day_rate /1000
 
-                summary_days = int(summary_days) + int(crit_cve_days)
+                summary_eff = int(summary_eff) + int(crit_cve_eff)
                 summary_cost = round(summary_cost + crit_cve_cost,2)
 
-                fix_now_days = int(fix_now_days) + int(crit_cve_days)
+                fix_now_eff = int(fix_now_eff) + int(crit_cve_eff)
                 fix_now_cost = round(fix_now_cost + crit_cve_cost,2)
 
-                near_term_days = int(near_term_days) + int(high_cve_days)
+                near_term_eff = int(near_term_eff) + int(high_cve_eff)
                 near_term_cost = round(near_term_cost + high_cve_cost + med_cve_cost,2)
 
                 self._ppt.replace_text(f'{{app{app_no+1}_high_sec_tot}}','{high_cve}')
                 self._ppt.replace_text(f'{{app{app_no+1}_med_sec_tot}}','{med_cve}')
 
             #both AIP and HL data
+
+            ap.fill_action_plan_tags(app_no,'fix_now', \
+                fix_now_eff, fix_now_cost, fix_now_vio_cnt,fix_now_bus_txt,fix_now_vio_txt)
+            ap.fill_action_plan_tags(app_no,'near_term', \
+                near_term_eff, near_term_cost, near_term_vio_cnt,near_term_bus_txt,near_term_vio_txt)
+            ap.fill_action_plan_tags(app_no,'long_term', \
+                long_term_eff, long_term_cost, long_term_vio_cnt,long_term_bus_txt,long_term_vio_txt)
+            ap.fill_action_plan_tags(app_no,'mid_term', med_eff, med_cost, med_vio_cnt,med_bus_txt,med_vio_txt)
+
+            ap.fill_action_plan_tags(app_no,'summary', \
+                summary_eff, summary_cost, summary_vio_cnt,summary_bus_txt,summary_vio_txt)
+
+            ap.fill_action_plan_tags(app_no,'summary', \
+                summary_eff, summary_cost, summary_vio_cnt,summary_bus_txt,summary_vio_txt)
+
             summary_total_cost = summary_total_cost + summary_cost
 
-            self._ppt.replace_text(f'{{app{app_no+1}_summary_days}}',summary_days)
-            self._ppt.replace_text(f'{{app{app_no+1}_summary_cost}}',summary_cost)
-
-            self._ppt.replace_text(f'{{app{app_no+1}_fix_now_days}}',fix_now_days)
-            self._ppt.replace_text(f'{{app{app_no+1}_fix_now_cost}}',f'${fix_now_cost}K')
-
-            self._ppt.replace_text(f'{{app{app_no+1}_near_term_days}}',near_term_days)
-            self._ppt.replace_text(f'{{app{app_no+1}_near_term_cost}}',f'${near_term_cost}K')
-
-        self._ppt.replace_text(f'{summary_total_cost}',summary_total_cost)
-            
-               
-
-                
-
-
-    # def get_hl_data(self):
-    #     # self._hl_data = HLData(self._hl_base_url, self._hl_user, self._hl_pswd, self._hl_instance,self._project_name, self._hl_app_list)
-
-    #     # Retreive the app ids for given instance.
-    #     # TODO: try-except
-    #     self._hl_apps_df = self._hl_data.get_app_ids(self._hl_instance)
-
-    #     # App counter, used to address the next blank HL table on a slide.
-    #     app_no = 0
-    #     for i in range(len(self._hl_apps_df)):
-    #         app_name = self._hl_apps_df[i]['name']
-
-    #         if app_name in self._hl_app_list:
-    #             print(f'HL - Processing {app_name}')
-    #             app_id = self._hl_apps_df[i]['id']
-    #             app_no = app_no + 1
-    #             # Retreive CVE info
-
-    #             temp_cve_df = pd.DataFrame()
-
-    #             # Always retrieve all of the CRITICAL sev CVEs.
-    #             try:
-    #                 self._crit_cves_df = pd.DataFrame() 
-    #                 self._high_cves_df = pd.DataFrame() 
-    #                 self._med_cves_df = pd.DataFrame() 
-
-    #                 self._crit_cves_df = self._hl_data.get_cves(app_id, 'critical')
-
-    #                 # Only retrieve the HIGH sev CVEs, if we do not have enough of the CRITICAL sevs and,
-    #                 # only retrieve enough to fill one slide.
-    #                 # TODO: Do this only if third-party data was found.
-    #                 if len(self._crit_cves_df) < MAX_CVES_PER_SLIDE:
-    #                     self._high_cves_df = self._hl_data.get_cves(app_id, 'high', (MAX_CVES_PER_SLIDE - len(self._crit_cves_df)))
-
-    #                 # Only retrieve the MEDIUM sev CVEs when we do not have enough of the CRITICAL and the HIGH sevs and,
-    #                 # only retrieve enough to fill one slide.
-    #                 if len(self._crit_cves_df) + len(self._high_cves_df) < MAX_CVES_PER_SLIDE:
-    #                     self._med_cves_df = self._hl_data.get_cves(app_id, 'medium', 
-    #                                     (MAX_CVES_PER_SLIDE - (len(self._crit_cves_df) + len(self._high_cves_df))))
-
-    #                 temp_cve_df = self._crit_cves_df
-    #                 temp_cve_df = temp_cve_df.append(self._high_cves_df)
-    #                 temp_cve_df = temp_cve_df.append(self._med_cves_df)
-    #             except:
-    #                 print('ERROR: No CVE info found')
-
-    #             # Retreive the risky license info
-
-    #             try:
-    #                 self._high_lic_df = self._hl_data.get_lics(app_id, 'high')
-
-    #                 temp_lic_df = self._high_lic_df
-
-    #                 if len(self._high_lic_df) < MAX_LICS_PER_SLIDE:
-    #                     # Retrieve medium risk licenses only if we do no have enough highs.
-    #                     # TODO: errorhandling
-    #                     self._med_lic_df = self._hl_data.get_lics(app_id, 'medium', (MAX_LICS_PER_SLIDE - len(self._high_lic_df)))
-
-    #                     # Always print all components wth high risk licneses and print mediums only 
-    #                     # when there are not enough highs.
-
-    #                     if len(self._med_lic_df) > 0:
-    #                         temp_lic_df = temp_lic_df.append(self._med_lic_df)
-    #             except:
-    #                 print('ERROR: No license info found')
-
-    #             if len(temp_lic_df) > 0:
-    #                 self._ppt.update_table(f'app{app_no}_HL_table_lic_risks', temp_lic_df, include_index=False)
-    #             if len(temp_cve_df) > 0:
-    #                 self._ppt.update_table(f'app{app_no}_HL_table_CVEs', temp_cve_df, include_index=False)
-    #         else:
-    #             print(f'App {app_name}, found in HL, but report not requested. Skipping')
+        self._ppt.replace_text('{summary_total_cost}',summary_total_cost)                
 
     def fill_critical_rules(self,app_no):
         app_id = self._app_list[app_no]

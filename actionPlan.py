@@ -11,7 +11,7 @@ class ActionPlan:
     _effort_df = None
     _output_folder = None
 
-    _day_rate=1200
+    _day_rate=600
 
     __extrm_effort = 0
     __high_effort = 0
@@ -77,23 +77,23 @@ class ActionPlan:
             file_name = f'{self._output_folder}/{app_id}_action_plan.xlsx'
             writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
             col_widths=[50,40,10,10,10,50,10,10,10]
-            summary_tab = util.format_table(writer,ap_summary_df,'Summary',col_widths)
+            summary_tab = util.format_table(writer,ap_summary_df[['Quality Rule','Business Criteria','No. of Actions','comment']],'Summary',col_widths)
             col_widths=[10,50,50,30,30,30,30,30,30,30,30,30,30]
             util.format_table(writer,ap_df,'Action Plan',col_widths)
             writer.save()
 
             #fill action plan related tags
             (self.__extrm_effort,self.__extrm_cost,self.__extrm_total,self.__extrm_data) = \
-                self.fill_action_plan_text(ap_summary_df,app_no,'extreme','security')
+                self.calc_action_plan_effort(ap_summary_df,app_no,'extreme','security')
             
             (self.__high_effort,self.__high_cost,self.__high_total,self.__high_data) = \
-                self.fill_action_plan_text(ap_summary_df,app_no,'high')
+                self.calc_action_plan_effort(ap_summary_df,app_no,'high')
 
             (self.__med_effort,self.__med_cost,self.__med_total,self.__med_data) = \
-                self.fill_action_plan_text(ap_summary_df,app_no,'moderate')
+                self.calc_action_plan_effort(ap_summary_df,app_no,'moderate')
 
             (self.__low_effort,self.__low_cost,self.__low_total,self.__low_data) = \
-                self.fill_action_plan_text(ap_summary_df,app_no,'low')
+                self.calc_action_plan_effort(ap_summary_df,app_no,'low')
 
             #configure action plan table background colors 
             ap_summary_df.loc[ap_summary_df['tag']=='extreme','RGB']='244,212,212'
@@ -129,19 +129,19 @@ class ActionPlan:
             self._ppt.replace_text(f"{{app{app_no+1}_moderate_violation_total}}",'TBD') 
             self._ppt.replace_text(f"{{app{app_no+1}_low_violation_total}}",'TBD') 
 
-    def fill_action_plan_text(self,ap_summary_df,app_no,priority,default=''):
-        (priority_text, violation_total, filtered) = self.common_business_criteria(ap_summary_df,priority,default)
-        violation_text = self.list_violations(filtered)
-        days_effort = math.ceil(filtered['Days Effort'].sum())
-        cost_effort = (days_effort*self._day_rate)/1000
+    def calc_action_plan_effort(self,ap_summary_df,app_no,priority,default=''):
+        (priority_text, vio_cnt, data) = self.common_business_criteria(ap_summary_df,priority,default)
+        effort = math.ceil(data['Days Effort'].sum()*2)
+        cost = (effort*self._day_rate)/1000
+        return effort, cost, vio_cnt, data
 
-        # self._ppt.replace_text(f"{{app{app_no+1}_{priority}_business_criteria_text}}",priority_text.lower()) 
-        # self._ppt.replace_text(f"{{app{app_no+1}_{priority}_violation_total}}",violation_total) 
-        # self._ppt.replace_text(f"{{app{app_no+1}_{priority}_violation_text}}",self.list_violations(filtered)) 
-        # self._ppt.replace_text(f"{{app{app_no+1}_{priority}_cost}}",f'${cost_effort*2}K') 
-        # self._ppt.replace_text(f"{{app{app_no+1}_{priority}_days}}",f'{days_effort*2}')
+    def fill_action_plan_tags(self,app_no,type,effort,cost,vio_cnt,bus_txt,vio_txt):
+        self._ppt.replace_text(f'{{app{app_no+1}_{type}_eff}}',effort)
+        self._ppt.replace_text(f'{{app{app_no+1}_{type}_cost}}',cost)
+        self._ppt.replace_text(f'{{app{app_no+1}_{type}_vio_cnt}}',vio_cnt)
 
-        return days_effort, cost_effort, violation_total, filtered
+        self._ppt.replace_text(f'{{app{app_no+1}_{type}_bus_txt}}',bus_txt)
+        self._ppt.replace_text(f'{{app{app_no+1}_{type}_vio_txt}}',vio_txt)
 
     def common_business_criteria(self,summary_df,priority,default=''):
         filtered=summary_df[summary_df['tag']==priority]
