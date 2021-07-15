@@ -3,7 +3,10 @@ import util
 import pandas as pd
 
 
-
+"""
+    This class is used to collect action plan information and add them to the 
+    the proper tags
+"""
 class ActionPlan:
     _app_list = []
     _ppt = None
