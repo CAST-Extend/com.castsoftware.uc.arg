@@ -533,6 +533,11 @@ class PowerPoint:
         r = run._r
         r.getparent().remove(r)
 
+    def delete_slide(self, index):
+        xml_slides = self._prs.slides._sldIdLst  
+        slides = list(xml_slides)
+        xml_slides.remove(slides[index])  
+
     def save(self):
         self._prs.save(self._output)
 
