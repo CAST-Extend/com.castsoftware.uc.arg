@@ -15,6 +15,7 @@ from logging import DEBUG, INFO, ERROR
 
 from restAPI import RestCall
 from aipRestCall import AipRestCall
+from hlRestCall import HLRestCall
 
 """
     This class is used to retrieve information from the CAST AIP REST API
@@ -207,88 +208,6 @@ class AipData(AipRestCall):
                 rslt = rslt + ", "
         return rslt
 
-class HLRestCall(RestCall):
-    """
-    Class to handle HL REST API calls.
-    """
-    def __init__(self, hl_base_url, hl_user, hl_pswd, hl_instance, timer_on=False):
-        super().__init__(hl_base_url, hl_user, hl_pswd, timer_on)
-
-        self._hl_instance = hl_instance
-        self._hl_data_retrieved = False
-    
-    def _get_app_ids(self, instance_id):
-        # Retrieve the HL app id for the application.
-
-        try:
-            # TODO: remove the hard-coding
-            # TODO: Get the app id.
-            url = f'domains/{instance_id}/applications'
-
-            (status, json) = self.get(url,headers={'Accept': '*/*'})
-
-            # TODO: Handle exceptions
-            if status == requests.codes.ok and len(json) > 0:
-                pass
-        except:
-            # TODO
-            print('Oopsi.. caught an exception')
-            raise
-
-        return json
-
-    def get_app_id(self,app_name):
-        url = f'domains/{self._hl_instance}/applications/'
-        (status, json) = self.get(url)
-
-        # TODO: Handle exceptions
-        if status == requests.codes.ok and len(json) > 0:
-            for id in json:
-                if id['name'].lower()==app_name.lower():
-                    return id['id']
-            raise KeyError (f'Application not found')
-
-    def get_third_party(self, app_id):
-        cves = pd.DataFrame()
-        lic = pd.DataFrame()
-
-        url = f'domains/{self._hl_instance}/applications/{app_id}/thirdparty'
-        (status, json) = self.get(url)
-
-        third_party = []
-        if status == requests.codes.ok and len(json) > 0:
-            third_party = json['thirdParties']
-            for tp in third_party:
-                if 'cve' in tp:
-                    cve_df = pd.json_normalize(tp['cve']['vulnerabilities'])
-                    cve_df.rename(columns={'name':'cve'},inplace=True)
-                    
-                    cve_df['component']=tp['name']
-                    cve_df['version']=tp['version']
-                    cve_df['languages']=tp['languages']
-                    cve_df['release']=tp['release']
-                    cve_df['origin']=tp['origin']
-                    cve_df['lastVersion']=tp['lastVersion']
-
-                    cves=pd.concat([cves,cve_df],ignore_index=True)
-
-                if 'licenses' in tp:
-                    lic_df = pd.json_normalize(tp['licenses'])
-                    lic_df.rename(columns={'name':'license'},inplace=True)
-                    lic_df['component']=tp['name']
-                    lic_df['version']=tp['version']
-                    lic_df['languages']=tp['languages']
-                    lic_df['release']=tp['release']
-                    lic_df['origin']=tp['origin']
-                    lic_df['lastVersion']=tp['lastVersion']
-                    lic=pd.concat([lic,lic_df],ignore_index=True)
-
-            if 'component' in cves.columns:
-                cves=cves[['component','version','languages','release','origin','lastVersion','cve', 'description', 'cweId', 'cweLabel', 'criticity', 'cpe']]
-            if 'component' in lic.columns:
-                lic=lic[['component','version','languages','release','origin','lastVersion','license','compliance']] 
-
-        return lic,cves,len(third_party)
 
 
 """
@@ -309,7 +228,8 @@ class HLData(HLRestCall):
             app_id = self.get_app_id(hl_app_name)
             if app_id:
                 (lic,cves,total_components) = self.get_third_party(app_id)
-
+                
+                self._data[s]['has data'] = True
                 self._data[s]['app_id']=app_id
                 self._data[s]['cves']=cves
                 self._data[s]['licenses']=lic
@@ -344,6 +264,9 @@ class HLData(HLRestCall):
             self._third_party_df = pd.DataFrame()
             self._cve_df = pd.DataFrame()
             self._lic_df = pd.DataFrame()
+
+    def has_data(self,app_id):
+        return self._data[app_id]['has data'] 
 
     def get_cve_crit_tot(self,app_id):
         return self._data[app_id]['cve_crit_tot']

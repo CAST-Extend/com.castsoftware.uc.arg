@@ -12,12 +12,15 @@ from actionPlan import ActionPlan
 from logger import Logger
 from IPython.display import display
 
+
 import pandas as pd
 import numpy as np 
 import util 
 import math
 import argparse
 import json
+import datetime
+
 
 class GeneratePPT(Logger):
     _app_list = []
@@ -55,12 +58,28 @@ class GeneratePPT(Logger):
         #project level work
         app_cnt = len(self._app_list)
 
+        self.remove_proc_slides(self._generate_procs)
+
         self._ppt.duplicate_slides(app_cnt)
         self._ppt.copy_block("each_app",["app"],app_cnt)
 
         self._ppt.replace_text("{app#_","{app1_")
 
         self.replace_all_text(app_cnt)
+
+    def remove_proc_slides(self,keep_it):
+        indexes=[]
+        for idx, slide in enumerate(self._ppt._prs.slides):
+            for shape in slide.shapes:
+                if shape.has_text_frame:
+                    for paragraph in shape.text_frame.paragraphs:
+                        if paragraph.text == "{proc_analysis}":
+                            self._ppt.replace_slide_text(slide,"{proc_analysis}","")
+                            indexes.append(idx)
+
+        for idx in reversed(indexes):
+            if not keep_it:
+                self._ppt.delete_slide(idx)
 
     def save_ppt(self):
         self._ppt.save()
@@ -104,6 +123,11 @@ class GeneratePPT(Logger):
 
         self._generate_AIP = config.get('output.aip').data
         self._generate_HL = config.get('output.hl').data
+        self._generate_procs = config.get('output.procs').data
+        if self._generate_procs.lower() == 'yes':
+            self._generate_procs=True
+        else:
+            self._generate_procs=False
         
         if self._generate_HL.lower() == 'yes':
             self._generate_HL = True
@@ -128,6 +152,11 @@ class GeneratePPT(Logger):
         self._ppt.replace_text("{project}", self._project_name)
         self._ppt.replace_text("{app_count}",app_cnt)
 
+        mydate = datetime.datetime.now()
+        month = mydate.strftime("%B")
+        self._ppt.replace_text("{month}",month)
+        self._ppt.replace_text("{year}",mydate.year)
+
         # replace AIP data global to all applications
         if self._generate_AIP:
             all_apps_avg_grade = self._aip_data.calc_grades_all_apps()
@@ -145,8 +174,8 @@ class GeneratePPT(Logger):
                 self._ppt.replace_text("{end_immediate_action}","") 
                 self._ppt.replace_text("{high_risk_grade_names}",self._aip_data.text_from_list(risk_grades.index.values.tolist()))
 
-            # create instance of action plan class 
-            ap = ActionPlan (self._app_list,self._aip_data,self._ppt,self._output_folder)
+        # create instance of action plan class 
+        ap = ActionPlan (self._app_list,self._aip_data,self._ppt,self._output_folder)
 
         for app_no in range(0,app_cnt):
             # replace application specific AIP data
@@ -163,10 +192,15 @@ class GeneratePPT(Logger):
             near_term_bus_txt = ''
             near_term_vio_txt = ''
 
-            med_eff = med_cost = med_vio_cnt = 0
-            med_data = DataFrame()
-            med_bus_txt = ''
-            med_vio_txt = ''
+            mid_eff = mid_cost = mid_vio_cnt = 0
+            mid_data = DataFrame()
+            mid_bus_txt = ''
+            mid_vio_txt = ''
+
+            low_eff = low_cost = low_vio_cnt = 0
+            low_data = DataFrame()
+            low_bus_txt = ''
+            low_vio_txt = ''
 
             long_term_eff = long_term_cost = long_term_vio_cnt = 0
             long_term_data = DataFrame()
@@ -220,13 +254,13 @@ class GeneratePPT(Logger):
 
                     percent_comment = loc_tbl.loc['Number of Comment Lines','percent']
                     percent_comment_out = loc_tbl.loc['Number of Commented-out Code Lines','percent']
-
                     if percent_comment < 15:
                         comment_level='low'
                     else:
                         comment_level='good'
                     self._ppt.replace_text(f'{{app{app_no+1}_comment_level}}',comment_level)
-                    self._ppt.replace_text(f'{{app{app_no+1}_comment_loc}}',percent_comment)
+                    self._ppt.replace_text(f'{{app{app_no+1}_comment_pct}}',percent_comment)
+                    self._ppt.replace_text(f'{{app{app_no+1}_comment_out_pct}}',percent_comment_out)
 
                     loc_tbl['percent']=pd.Series(["{0:.2f}%".format(val) for val in loc_tbl['percent']], index = loc_tbl.index)
                     self._ppt.update_table(f'app{app_no+1}_loc_table',loc_tbl,has_header=False)
@@ -262,17 +296,20 @@ class GeneratePPT(Logger):
                     near_term_bus_txt = util.list_to_text(ap.business_criteria(near_term_data))
                     near_term_vio_txt = ap.list_violations(near_term_data)
 
-                    (med_eff, med_cost, med_vio_cnt, med_data) = ap.get_med_costing()
-                    med_bus_txt = util.list_to_text(ap.business_criteria(med_data))
-                    med_vio_txt = ap.list_violations(med_data)
+                    (mid_eff, mid_cost, mid_vio_cnt, mid_data) = ap.get_med_costing()
+                    mid_bus_txt = util.list_to_text(ap.business_criteria(mid_data))
+                    mid_vio_txt = ap.list_violations(mid_data)
 
                     (low_eff, low_cost, low_vio_cnt, low_data) = ap.get_low_costing()
-                    long_term_data = pd.concat([low_data,med_data],ignore_index=True)
+                    low_bus_txt = util.list_to_text(ap.business_criteria(low_data))
+                    low_vio_txt = ap.list_violations(low_data)
+
+                    long_term_data = pd.concat([low_data,mid_data],ignore_index=True)
                     long_term_bus_txt = util.list_to_text(ap.business_criteria(long_term_data))
                     long_term_vio_txt = ap.list_violations(long_term_data)
-                    long_term_eff = int(med_eff) + int(low_eff)
-                    long_term_cost = float(med_cost) + float(low_cost)
-                    long_term_vio_cnt = int(med_vio_cnt) + int(low_vio_cnt)
+                    long_term_eff = int(mid_eff) + int(low_eff)
+                    long_term_cost = float(mid_cost) + float(low_cost)
+                    long_term_vio_cnt = int(mid_vio_cnt) + int(low_vio_cnt)
 
                     summary_data = pd.concat([fix_now_data,near_term_data],ignore_index=True)
                     summary_bus_txt = util.list_to_text(ap.business_criteria(summary_data))
@@ -281,9 +318,8 @@ class GeneratePPT(Logger):
                     summary_cost = float(fix_now_cost) + float(near_term_cost)
                     summary_vio_cnt = int(fix_now_vio_cnt) + int(near_term_vio_cnt)
 
-
             #replaceHighlight application specific data
-            if self._generate_HL:
+            if self._generate_HL and self._hl_data.has_data(app_id):
                 lic_df=self._hl_data.get_lic_info(app_id)
                 lic_df=self._hl_data.sort_lic_info(lic_df)
                 oss_df=self._hl_data.get_cve_info(app_id)
@@ -360,10 +396,10 @@ class GeneratePPT(Logger):
                 fix_now_cost = round(fix_now_cost + crit_cve_cost,2)
 
                 near_term_eff = int(near_term_eff) + int(high_cve_eff)
-                near_term_cost = round(near_term_cost + high_cve_cost + med_cve_cost,2)
+                near_term_cost = round(near_term_cost + med_cve_cost,2)
 
                 self._ppt.replace_text(f'{{app{app_no+1}_high_sec_tot}}','{high_cve}')
-                self._ppt.replace_text(f'{{app{app_no+1}_med_sec_tot}}','{med_cve}')
+                self._ppt.replace_text(f'{{app{app_no+1}_med_sec_tot}}','{mid__cve}')
 
             #both AIP and HL data
 
@@ -373,7 +409,8 @@ class GeneratePPT(Logger):
                 near_term_eff, near_term_cost, near_term_vio_cnt,near_term_bus_txt,near_term_vio_txt)
             ap.fill_action_plan_tags(app_no,'long_term', \
                 long_term_eff, long_term_cost, long_term_vio_cnt,long_term_bus_txt,long_term_vio_txt)
-            ap.fill_action_plan_tags(app_no,'mid_term', med_eff, med_cost, med_vio_cnt,med_bus_txt,med_vio_txt)
+            ap.fill_action_plan_tags(app_no,'mid_term', mid_eff, mid_cost, mid_vio_cnt,mid_bus_txt,mid_vio_txt)
+            ap.fill_action_plan_tags(app_no,'low', low_eff, low_cost, low_vio_cnt,low_bus_txt,low_vio_txt)
 
             ap.fill_action_plan_tags(app_no,'summary', \
                 summary_eff, summary_cost, summary_vio_cnt,summary_bus_txt,summary_vio_txt)
@@ -383,7 +420,22 @@ class GeneratePPT(Logger):
 
             summary_total_cost = summary_total_cost + summary_cost
 
-        self._ppt.replace_text('{summary_total_cost}',summary_total_cost)                
+        self._ppt.replace_text('{summary_total_cost}',summary_total_cost)  
+        if fix_now_eff > 0:
+            show_stopper_flg = 'no'
+        else:
+            show_stopper_flg = ''
+        self._ppt.replace_text('{show_stopper_flg}',show_stopper_flg)  
+
+        avg_cost = float(summary_total_cost/app_cnt)   
+        if avg_cost < 50:
+            hml_cost_flg = 'low'
+        elif avg_cost > 50 and avg_cost < 100:
+            hml_cost_flg = 'medium'
+        else:
+            hml_cost_flg = 'high'
+        self._ppt.replace_text('{hml_cost_flag}',hml_cost_flg)  
+
 
     def fill_critical_rules(self,app_no):
         app_id = self._app_list[app_no]
