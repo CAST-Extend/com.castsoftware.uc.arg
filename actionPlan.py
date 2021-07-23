@@ -143,7 +143,7 @@ class ActionPlan:
         self._ppt.replace_text(f'{{app{app_no+1}_{type}_cost}}',cost)
         self._ppt.replace_text(f'{{app{app_no+1}_{type}_vio_cnt}}',vio_cnt)
 
-        self._ppt.replace_text(f'{{app{app_no+1}_{type}_bus_txt}}',bus_txt)
+        self._ppt.replace_text(f'{{app{app_no+1}_{type}_bus_txt}}',bus_txt,tbd_for_blanks=False)
         self._ppt.replace_text(f'{{app{app_no+1}_{type}_vio_txt}}',vio_txt)
 
     def common_business_criteria(self,summary_df,priority,default=''):
