@@ -31,8 +31,8 @@ class GeneratePPT(Logger):
     _project_name = None
     _template = None
 
-    _generate_HL, _hl_base_url, _hl_user, hl_pswd = None, None, None, None
-    _generate_AIP, _aip_base_url, _aip_user, _aip_pswd = None, None, None, None
+    _generate_HL = _hl_base_url = _hl_user = hl_pswd = None
+    _generate_AIP = _aip_base_url = _aip_user = _aip_pswd = None
     _hl_instance = None
     _hl_apps_df = pd.DataFrame()
     _hl_app_list = []
@@ -180,6 +180,7 @@ class GeneratePPT(Logger):
         for app_no in range(0,app_cnt):
             # replace application specific AIP data
             app_id = self._app_list[app_no]
+            self.info(f'Working on pages for {self._appl_title[app_id]}')
             self._ppt.replace_text(f'{{app{app_no+1}_name}}',self._appl_title[app_id])
 
             fix_now_eff = fix_now_cost = fix_now_vio_cnt = 0
@@ -287,32 +288,32 @@ class GeneratePPT(Logger):
 
                     (fix_now_eff, fix_now_cost, fix_now_vio_cnt, fix_now_data) = \
                         ap.get_extreme_costing()
-                    fix_now_bus_txt = util.list_to_text(ap.business_criteria(fix_now_data))
+                    fix_now_bus_txt = util.list_to_text(ap.business_criteria(fix_now_data)) + ' '
                     fix_now_vio_txt = ap.list_violations(fix_now_data)
                         
 
                     (near_term_eff, near_term_cost, near_term_vio_cnt, near_term_data) = \
                         ap.get_high_costing()
-                    near_term_bus_txt = util.list_to_text(ap.business_criteria(near_term_data))
+                    near_term_bus_txt = util.list_to_text(ap.business_criteria(near_term_data)) + ' '
                     near_term_vio_txt = ap.list_violations(near_term_data)
 
                     (mid_eff, mid_cost, mid_vio_cnt, mid_data) = ap.get_med_costing()
-                    mid_bus_txt = util.list_to_text(ap.business_criteria(mid_data))
+                    mid_bus_txt = util.list_to_text(ap.business_criteria(mid_data)) + ' '
                     mid_vio_txt = ap.list_violations(mid_data)
 
                     (low_eff, low_cost, low_vio_cnt, low_data) = ap.get_low_costing()
-                    low_bus_txt = util.list_to_text(ap.business_criteria(low_data))
+                    low_bus_txt = util.list_to_text(ap.business_criteria(low_data)) + ' '
                     low_vio_txt = ap.list_violations(low_data)
 
                     long_term_data = pd.concat([low_data,mid_data],ignore_index=True)
-                    long_term_bus_txt = util.list_to_text(ap.business_criteria(long_term_data))
+                    long_term_bus_txt = util.list_to_text(ap.business_criteria(long_term_data)) + ' '
                     long_term_vio_txt = ap.list_violations(long_term_data)
                     long_term_eff = int(mid_eff) + int(low_eff)
                     long_term_cost = float(mid_cost) + float(low_cost)
                     long_term_vio_cnt = int(mid_vio_cnt) + int(low_vio_cnt)
 
                     summary_data = pd.concat([fix_now_data,near_term_data],ignore_index=True)
-                    summary_bus_txt = util.list_to_text(ap.business_criteria(summary_data))
+                    summary_bus_txt = util.list_to_text(ap.business_criteria(summary_data)) + ' '
                     summary_vio_txt = ap.list_violations(summary_data)
                     summary_eff = int(fix_now_eff) + int(near_term_eff)
                     summary_cost = float(fix_now_cost) + float(near_term_cost)
@@ -372,22 +373,22 @@ class GeneratePPT(Logger):
                     crit_cve_eff = 0
                     crit_cve_cost = 0
                 else:
-                    crit_cve_eff = math.ceil(crit_cve/5)
+                    crit_cve_eff = math.ceil(crit_cve/2)
                     crit_cve_cost = crit_cve_eff * ap._day_rate /1000
 
                 if high_cve is None:
                     high_cve_eff = 0
                     high_cve_cost = 0
                 else:
-                    high_cve_eff = math.ceil(high_cve/5)
+                    high_cve_eff = math.ceil(high_cve/2)
                     high_cve_cost = high_cve_eff * ap._day_rate /1000
 
-                if high_cve is None:
-                    med_cve_days = 0
+                if med_cve is None:
+                    med_cve_eff = 0
                     med_cve_cost = 0
                 else:   
-                    med_cve_days = math.ceil(med_cve/5)
-                    med_cve_cost = med_cve_days * ap._day_rate /1000
+                    med_cve_eff = math.ceil(med_cve/2)
+                    med_cve_cost = med_cve_eff * ap._day_rate /1000
 
                 summary_eff = int(summary_eff) + int(crit_cve_eff)
                 summary_cost = round(summary_cost + crit_cve_cost,2)
@@ -395,21 +396,24 @@ class GeneratePPT(Logger):
                 fix_now_eff = int(fix_now_eff) + int(crit_cve_eff)
                 fix_now_cost = round(fix_now_cost + crit_cve_cost,2)
 
-                near_term_eff = int(near_term_eff) + int(high_cve_eff)
-                near_term_cost = round(near_term_cost + med_cve_cost,2)
+                near_term_eff = int(near_term_eff) + int(high_cve_eff) + int(med_cve_eff)
+                near_term_cost = round(near_term_cost + high_cve_cost + med_cve_cost,2)
 
                 self._ppt.replace_text(f'{{app{app_no+1}_high_sec_tot}}','{high_cve}')
                 self._ppt.replace_text(f'{{app{app_no+1}_med_sec_tot}}','{mid__cve}')
 
-            #both AIP and HL data
+            # if not self._generate_AIP and self._generate_HL:
+            #     #This deck is for HL only, lets make some adjustments
+            #     fix_now_bus_txt=near_term_bus_txt=long_term_bus_txt=None
 
+            #both AIP and HL data
             ap.fill_action_plan_tags(app_no,'fix_now', \
                 fix_now_eff, fix_now_cost, fix_now_vio_cnt,fix_now_bus_txt,fix_now_vio_txt)
             ap.fill_action_plan_tags(app_no,'near_term', \
                 near_term_eff, near_term_cost, near_term_vio_cnt,near_term_bus_txt,near_term_vio_txt)
             ap.fill_action_plan_tags(app_no,'long_term', \
                 long_term_eff, long_term_cost, long_term_vio_cnt,long_term_bus_txt,long_term_vio_txt)
-            ap.fill_action_plan_tags(app_no,'mid_term', mid_eff, mid_cost, mid_vio_cnt,mid_bus_txt,mid_vio_txt)
+            ap.fill_action_plan_tags(app_no,'mid', mid_eff, mid_cost, mid_vio_cnt,mid_bus_txt,mid_vio_txt)
             ap.fill_action_plan_tags(app_no,'low', low_eff, low_cost, low_vio_cnt,low_bus_txt,low_vio_txt)
 
             ap.fill_action_plan_tags(app_no,'summary', \

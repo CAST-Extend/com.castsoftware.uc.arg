@@ -141,15 +141,19 @@ class PowerPoint:
         return rgb
 
 
-    def replace_text (self, search_str, repl_str):
-        skip = False
-        omit_list = ["immediate_action","other","risk_detail"]
-        for s in omit_list:
-            if s in search_str:
-                skip=True
+    def replace_text (self, search_str, repl_str, tbd_for_blanks=True):
+        if tbd_for_blanks:
+            skip = False
+            omit_list = ["immediate_action","other","risk_detail"]
+            for s in omit_list:
+                if s in search_str:
+                    skip=True
 
-        if not skip and len(str(repl_str)) == 0:
-            repl_str = 'TBD'
+            if repl_str is not None and (type(repl_str)==int or type(repl_str)==float):
+                repl_str=f'{repl_str:,}'
+
+            if not skip and len(str(repl_str)) == 0:
+                repl_str = 'TBD'
 
         for slide in self._prs.slides:
             self.replace_slide_text(slide, search_str, repl_str)
