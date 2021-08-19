@@ -298,6 +298,7 @@ class PowerPoint:
             table=table_shape.table
 
             colnames = list(df.columns)
+            self._logger.info(f'filling table {name} with {len(df.index)} rows of data')
 
             # Insert the row zero names
             if include_index:

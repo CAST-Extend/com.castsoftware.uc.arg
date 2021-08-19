@@ -1,11 +1,9 @@
 from io import RawIOBase
-from pandas.core.frame import DataFrame
-import requests
-import pandas as pd
-import enum
-import urllib.parse
-import numpy as np 
-import json
+
+from pandas import DataFrame
+from pandas import json_normalize
+from pandas import concat
+from pandas import notnull
 
 from requests.auth import HTTPBasicAuth 
 from time import perf_counter, ctime
@@ -16,6 +14,12 @@ from logging import DEBUG, INFO, ERROR
 from restAPI import RestCall
 from aipRestCall import AipRestCall
 from hlRestCall import HLRestCall
+
+import requests
+import enum
+import urllib.parse
+import numpy as np 
+import json
 
 """
     This class is used to retrieve information from the CAST AIP REST API
@@ -39,10 +43,19 @@ class AipData(AipRestCall):
         '10163':'Tables'
     }
 
+    _imp_list = ['66070','61001','61013','61004','66009',
+                 '61009','61029','61031','61010','61011',
+                 '61026','61027','66068','61018','61019',
+                 '61014','61015','61020','61003','61024',
+                 '66069','66063','66066','66062','66065',
+                 '66064']
+
+    _doc_list = ['61008','61007','61017','61017','61006','61028','61022','61023']
+
     _health_grade_ids = ['Efficiency','Robustness','Security','Changeability','Transferability']
 
-    def __init__(self, base_url,user,pswd, app_list, timer_on=False):
-        super().__init__(base_url, user, pswd, timer_on)
+    def __init__(self, base_url,user,pswd, app_list, timer_on=False,log_level=INFO):
+        super().__init__(base_url, user, pswd, timer_on,log_level)
 
         #self._rest=rest
         self._base=app_list
@@ -59,6 +72,8 @@ class AipData(AipRestCall):
                 self._data[s]['snapshot']=self.get_latest_snapshot(domain_id)
                 if self._data[s]['snapshot']:
                     self._data[s]['has data'] = True
+                    self._data[s]['tqi_compliance']=self.aggregate_violation_ratio(s,'60017',self._imp_list)
+                    self._data[s]['doc_compliance']=self.aggregate_violation_ratio(s,'60017',self._doc_list)
                     self._data[s]['grades']=self.get_grades_by_technology(domain_id,self._data[s]['snapshot'])
                     self._data[s]['sizing']=self.get_sizing_by_technology(domain_id,self._data[s]['snapshot'],self._sizing)
                     self._data[s]['loc_sizing']=self.get_sizing(domain_id,self._sizing) 
@@ -93,6 +108,88 @@ class AipData(AipRestCall):
     def critical_rules(self, app):
         return self.data(app)['critical_rules']
 
+    def tqi_compliance(self, app):
+        return self.data(app)['tqi_compliance']
+
+    def doc_compliance(self, app):
+        return self.data(app)['doc_compliance']
+
+    def aggregate_violation_ratio(self,app,key,sub_keys,crit_only=True):
+        self.debug(f'aggregating violation ration information for {app}')
+        sid = self.snapshot(app)['id']
+        domain_id = self.domain(app)
+
+        df = DataFrame(columns=['Key','Rule','Detail','Weight','Total','Failed','Succeeded','Compliance','Score'])
+        indicators = self.get_quality_indicators(domain_id,sid, key)
+
+        for ind in indicators:
+            ind_key = ind['key']
+            if ind_key in sub_keys:
+                ind_name = ind['name'] #.replace('-','\n  ',1)
+                ind_weight = ind['weight']
+                vr = self.get_violation_ratio(domain_id,ind_key)
+                try:
+                    if vr:
+                        temp = json_normalize(vr)
+                        temp = temp[temp['reference.critical']==True]
+                        agr = temp.agg({ 
+                            'result.violationRatio.totalChecks': ['sum'], 
+                            'result.violationRatio.failedChecks': ['sum'], 
+                            'result.violationRatio.successfulChecks': ['sum'] 
+                            })
+        #                agr['compliance']=(agr['result.violationRatio.successfulChecks']/agr['result.violationRatio.totalChecks'])*100
+                        grade_set=self.get_grade(domain_id,ind_key)
+                        grade=round(grade_set[0]['result']['grade'],2)
+
+                        compliance=grade_set[0]['result']['score']*100
+
+                        temp = temp[temp['result.grade']<=2]
+                        detail = "\n".join(temp['reference.name'].tolist())
+                        total=int(agr.iloc[0]['result.violationRatio.totalChecks'])
+                        if total == 0:
+                            continue
+                        failed=int(agr.iloc[0]['result.violationRatio.failedChecks'])
+                        success=int(agr.iloc[0]['result.violationRatio.successfulChecks'])
+
+                        df.loc[len(df)] = [
+                            ind_key,
+                            ind_name,
+                            detail,
+                            ind_weight,
+                            f'{total:,}',
+                            f'{failed:,}',
+                            f'{success:,}',
+                            f'{int(compliance)}%',
+                            grade
+                        ]                
+                except (KeyError):
+                    self.logger.warn(f'Key Error while aggregating {ind_name}')
+                # print (df)
+
+        # for ind in indicators:
+        #     key = ind['key']
+        #     name = ind['name']
+        #     weight = ind['weight']
+        #     vr = self.get_violation_ratio(domain_id,key)
+        #     if vr:
+        #         temp = json_normalize(vr)
+        #         temp['key']=key
+        #         temp['name']=name
+        #         temp['weight']=weight
+        #         df = concat([df,temp])
+
+        # df.rename(columns={"name":"parent","reference.name":"name","reference.critical":"critical"},inplace=True)
+        # df.rename(columns={"result.grade":"grade","result.violationRatio.totalChecks":"totalChecks"},inplace=True)
+        # df.rename(columns={"result.violationRatio.failedChecks":"failedChecks"},inplace=True)
+        # df.rename(columns={"result.violationRatio.successfulChecks":"successfulChecks"},inplace=True)
+        # df.rename(columns={"result.violationRatio.violationOccurrences":"violationOccurrences"},inplace=True)
+        # df.rename(columns={"result.violationRatio.ratio":"ratio"},inplace=True)
+
+        # return df[[ 'type','key', 'parent', 'weight','name','critical', 'grade','totalChecks', 'failedChecks', \
+        #             'violationOccurrences', 'successfulChecks','ratio', 'result.score']]
+
+        return df
+
     def action_plan(self, app):
         ap_df = self.data(app)['action_plan']
         ap_summary_df = self.data(app)['action_plan_summary']
@@ -106,16 +203,16 @@ class AipData(AipRestCall):
             return app_grades.sort_values()
 
     def calc_grades_all_apps(self):
-        all_app=pd.DataFrame()
+        all_app=DataFrame()
         for row in self._data:
             if self.has_data(row):
                 app_name=self.snapshot(row)['name']
                 grades=self.grades(row)
-                all_app = pd.concat([all_app,grades[grades.index.isin(['All'])].rename(index={'All': app_name})]).drop_duplicates()
+                all_app = concat([all_app,grades[grades.index.isin(['All'])].rename(index={'All': app_name})]).drop_duplicates()
         return all_app[all_app.columns].mean(axis=0)
 
     def calc_grades_health(self,grade_all):
-        grade_df = pd.DataFrame(grade_all)
+        grade_df = DataFrame(grade_all)
         grade_health=grade_df[grade_df.index.isin(self._health_grade_ids)]
         return grade_health
 
@@ -163,16 +260,16 @@ class AipData(AipRestCall):
         grade_df = self.grades(app).round(2).applymap('{:,.2f}'.format)
         grade_df = grade_df[grade_df.index.isin(['All'])==False]
 
-        sizing_df = pd.DataFrame(self.sizing(app))
+        sizing_df = DataFrame(self.sizing(app))
         sizing_df = sizing_df[sizing_df.index.isin(['All'])==False]
-        sizing_df = pd.DataFrame(sizing_df["Number of Code Lines"].rename("LOC")).dropna()
+        sizing_df = DataFrame(sizing_df["Number of Code Lines"].rename("LOC")).dropna()
         sizing_df = sizing_df.applymap('{:,.0f}'.format)
         
         tech = sizing_df.join(grade_df) 
 
-        sizing_df = pd.DataFrame(self.sizing(app)) 
+        sizing_df = DataFrame(self.sizing(app)) 
         sizing_df = sizing_df[sizing_df.index.isin(['All'])==False]
-        sizing_df = pd.DataFrame(sizing_df["Critical Violations"]).dropna()
+        sizing_df = DataFrame(sizing_df["Critical Violations"]).dropna()
         sizing_df = sizing_df.applymap('{:,.0f}'.format)
         tech = tech.join(sizing_df)
 
@@ -214,7 +311,7 @@ class AipData(AipRestCall):
 
 """
 class HLData(HLRestCall):
-    _data={}
+    __data={}
 
     def __init__(self, hl_base_url, hl_user, hl_pswd, hl_instance, app_list, app_translate_list, timer_on=False):
         super().__init__(hl_base_url, hl_user, hl_pswd, hl_instance, timer_on)
@@ -222,34 +319,40 @@ class HLData(HLRestCall):
         for s in app_list:
             hl_app_name=app_translate_list[s]
             self.info(f'Collecting Highlight data for {s}({hl_app_name})')
-            self._data[s]={}
-            self._data[s]['has data'] = False
+            self.__data[s]={}
+            self.__data[s]['has data'] = False
 
             app_id = self.get_app_id(hl_app_name)
             if app_id:
                 (lic,cves,total_components) = self.get_third_party(app_id)
                 
-                self._data[s]['has data'] = True
-                self._data[s]['app_id']=app_id
-                self._data[s]['cves']=cves
-                self._data[s]['licenses']=lic
+                self.__data[s]['has data'] = True
+                self.__data[s]['app_id']=app_id
+                self.__data[s]['cves']=cves
+                self.__data[s]['licenses']=lic
 
                 if cves.empty:
-                    self._data[s]['cve_crit_tot']=0
-                    self._data[s]['cve_high_tot']=0
-                    self._data[s]['cve_med_tot']=0
+                    self.__data[s]['cve_crit_tot']=0
+                    self.__data[s]['cve_crit_comp_tot']=0
+                    self.__data[s]['cve_high_tot']=0
+                    self.__data[s]['cve_high_comp_tot']=0
+                    self.__data[s]['cve_med_tot']=0
+                    self.__data[s]['cve_med_comp_tot']=0
                 else:
-                    self._data[s]['cve_crit_tot']=len(cves[cves['criticity']=='CRITICAL']['cve'].unique())
-                    self._data[s]['cve_high_tot']=len(cves[cves['criticity']=='HIGH']['cve'].unique())
-                    self._data[s]['cve_med_tot']=len(cves[cves['criticity']=='MEDIUM']['cve'].unique())
+                    self.__data[s]['cve_crit_tot']=len(cves[cves['criticity']=='CRITICAL']['cve'].unique())
+                    self.__data[s]['cve_crit_comp_tot']=len(cves[cves['criticity']=='CRITICAL']['component'].unique())
+                    self.__data[s]['cve_high_tot']=len(cves[cves['criticity']=='HIGH']['cve'].unique())
+                    self.__data[s]['cve_high_comp_tot']=len(cves[cves['criticity']=='HIGH']['component'].unique())
+                    self.__data[s]['cve_med_tot']=len(cves[cves['criticity']=='MEDIUM']['cve'].unique())
+                    self.__data[s]['cve_med_comp_tot']=len(cves[cves['criticity']=='MEDIUM']['component'].unique())
                 if lic.empty:
-                    self._data[s]['lic_high_tot']=0
-                    self._data[s]['lic_med_tot']=0
+                    self.__data[s]['lic_high_tot']=0
+                    self.__data[s]['lic_med_tot']=0
                 else:
-                    self._data[s]['lic_high_tot']=len(lic[lic['compliance']=='low']['component'].unique())
-                    self._data[s]['lic_med_tot']=len(lic[lic['compliance']=='medium']['component'].unique())
+                    self.__data[s]['lic_high_tot']=len(lic[lic['compliance']=='low']['component'].unique())
+                    self.__data[s]['lic_med_tot']=len(lic[lic['compliance']=='medium']['component'].unique())
 
-                self._data[s]['total_components']=total_components
+                self.__data[s]['total_components']=total_components
             else:
                 self.error(f'Highlight Application Id not found for {hl_app_name}')    
         #    self._base = schema
@@ -261,40 +364,46 @@ class HLData(HLRestCall):
             self._has_med_sev_cves = False
             self._has_high_risk_lics = False
             self._has_med_risk_lics = False
-            self._third_party_df = pd.DataFrame()
-            self._cve_df = pd.DataFrame()
-            self._lic_df = pd.DataFrame()
+            self._third_party_df = DataFrame()
+            self._cve_df = DataFrame()
+            self._lic_df = DataFrame()
 
     def has_data(self,app_id):
-        return self._data[app_id]['has data'] 
+        return self.__data[app_id]['has data'] 
 
     def get_cve_crit_tot(self,app_id):
-        return self._data[app_id]['cve_crit_tot']
+        return self.__data[app_id]['cve_crit_tot']
+    def get_cve_crit_comp_tot(self,app_id):
+        return self.__data[app_id]['cve_crit_comp_tot']
 
     def get_cve_high_tot(self,app_id):
-        return self._data[app_id]['cve_high_tot']
+        return self.__data[app_id]['cve_high_tot']
+    def get_cve_high_comp_tot(self,app_id):
+        return self.__data[app_id]['cve_high_comp_tot']
 
     def get_cve_med_tot(self,app_id):
-        return self._data[app_id]['cve_med_tot']
+        return self.__data[app_id]['cve_med_tot']
+    def get_cve_med_comp_tot(self,app_id):
+        return self.__data[app_id]['cve_med_comp_tot']
 
     def get_lic_high_tot(self,app_id):
-        return self._data[app_id]['lic_high_tot']
+        return self.__data[app_id]['lic_high_tot']
 
     def get_lic_med_tot(self,app_id):
-        return self._data[app_id]['lic_med_tot']
+        return self.__data[app_id]['lic_med_tot']
 
     def get_oss_cmpn_tot(self,app_id):
-        return self._data[app_id]['total_components']
+        return self.__data[app_id]['total_components']
         
 
     def get_third_party_info(self,app_id):
-        return DataFrame(self._data[app_id]['components'])
+        return DataFrame(self.__data[app_id]['components'])
 
     def get_lic_info(self,app_name):
         """
             Extract all license relavent columns from the components DF 
         """
-        lic = self._data[app_name]['licenses']
+        lic = self.__data[app_name]['licenses']
 
         #adjust license risk factors
         if lic is None:
@@ -315,7 +424,7 @@ class HLData(HLRestCall):
         """
             Extract all license relavent columns from the components DF 
         """
-        cves = self._data[app_name]['cves']
+        cves = self.__data[app_name]['cves']
         oss_df = DataFrame(columns=['component','critical','high','medium'])
 
         if cves is not None and not cves.empty:
@@ -339,7 +448,7 @@ class HLData(HLRestCall):
             oss_df = cve_critical_df.merge(cve_high_df,on='component',how='outer')
     #        oss_df = oss_df.merge(cve_high_df,on='component',how='outer')
             oss_df = oss_df.merge(cve_medium_df,on='component',how='outer')
-            oss_df = oss_df.where(pd.notnull(oss_df),'')
+            oss_df = oss_df.where(notnull(oss_df),'')
             oss_df = oss_df[['component','critical','high','medium']]
 
         return oss_df
@@ -375,7 +484,7 @@ class HLData(HLRestCall):
                 lic_all.sort_values(by=['component','release'],inplace=True)
                 lic_high = lic_all[lic_all['compliance']=="High"]
                 lic_medium = lic_all[lic_all['compliance']=="Medium"]
-                return pd.concat([lic_high,lic_medium])
+                return concat([lic_high,lic_medium])
             except (KeyError):
                 return lic_df
 
@@ -393,7 +502,7 @@ class HLData(HLRestCall):
         if not self._got_data:
             # If we do not have the data already for this app, retrieve it first.
 
-            self._third_party_df = pd.DataFrame(self.get_third_party(app_id)['thirdParties'])
+            self._third_party_df = DataFrame(self.get_third_party(app_id)['thirdParties'])
             # TODO: Confirm that data was retrieved before setting this to True
             self._got_data = True
 
@@ -413,7 +522,7 @@ class HLData(HLRestCall):
         Note that low CVEs are ignored for assessment purposes.
         """
 
-        _cve_df = pd.DataFrame()
+        _cve_df = DataFrame()
         sev_type = type.lower()
 
         # If the request is for critical sev CVEs, override the limit and return all rows.
@@ -496,7 +605,7 @@ class HLData(HLRestCall):
 
         compliance = ''
         _lic = []
-        _lic_df = pd.DataFrame()
+        _lic_df = DataFrame()
 
         # Do we have the data retrieved for the app? If not, auto-retrieve.
         # If all == False, limit the number of CVEs returned.
@@ -567,11 +676,5 @@ class HLData(HLRestCall):
         #print(_lic_df)
         return _lic_df
 
-"""
-apps = ["actionplatform","intersect"] 
-aip_data = AipData(aip_rest,"Florence", apps)
-
-app_id = apps[0]
-grade_all = aip_data.get_app_grades(app_id)
-text = aip_data.get_grade_at_risk_text(grade_all)
-"""
+# rest = AipData('http://sha-dd-node02:8080/CAST-RESTAPI-integrated/rest/','cast','cast',['MainWebApplication'],log_level=DEBUG)
+# vr = rest.aggregate_violation_ratio('MainWebApplication',"60017")
