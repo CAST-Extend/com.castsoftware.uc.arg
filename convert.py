@@ -245,8 +245,10 @@ class GeneratePPT(Logger):
                     imp_df = self._aip_data.tqi_compliance(app_id)
                     imp_df.drop(columns=['Key','Total','Weight'],inplace=True)
                     imp_df.sort_values(by=['Score','Rule'], inplace=True)
-                    imp_df['RGB'] = np.where(imp_df.Score >= 3,'168,228,195',\
-                        np.where(imp_df.Score < 2,'255,168,168','255,234,168'))
+                    # imp_df['RGB'] = np.where(imp_df.Score >= 3,'168,228,195',\
+                        # np.where(imp_df.Score < 2,'255,168,168','255,234,168'))
+                    imp_df['RGB'] = np.where(imp_df.Score >= 3,'194,236,213',\
+                        np.where(imp_df.Score < 2,'255,210,210','255,240,194'))
                     imp_df.Score = imp_df.Score.map('{:.2f}'.format)
                     self._ppt.update_table(f'app{app_no+1}_imp_table',imp_df,include_index=False,background='RGB')
 
@@ -255,6 +257,19 @@ class GeneratePPT(Logger):
                         Populate the document insites page
                         The necessary data is found in the loc_tbl
                     """
+                    # This section fetches data for Documentation slide, excludes certain columns, sorts with few column, 
+                    # and based on score of particular element seggregates colors(Red, Yellow & Green) and update to app1_doc_table element.
+                    # 255,168,168 - Red shades
+                    # 255,234,168 - Yellow shades
+                    # 168,228,195 - Green shades
+                    doc_df = self._aip_data.doc_compliance(app_id)
+                    doc_df.drop(columns=['Key','Total','Weight'],inplace=True) #'Detail',
+                    doc_df.sort_values(by=['Score','Rule'], inplace=True)
+                    # doc_df['RGB'] = np.where(doc_df.Score >= 3,'168,228,195',np.where(doc_df.Score < 2,'255,168,168','255,234,168'))
+                    doc_df['RGB'] = np.where(doc_df.Score >= 3,'194,236,213',np.where(doc_df.Score < 2,'255,210,210','255,240,194'))
+                    doc_df.Score = doc_df.Score.map('{:.2f}'.format)
+                    self._ppt.update_table(f'app{app_no+1}_doc_table',doc_df,include_index=False,background='RGB')
+                    
                     loc_df = self._aip_data.get_loc_sizing(app_id)
                     loc = loc_df['Number of Code Lines']
                     self._ppt.replace_loc(loc,app_no+1)
@@ -268,8 +283,13 @@ class GeneratePPT(Logger):
                     percent_comment_out = loc_tbl.loc['Number of Commented-out Code Lines','percent']
                     if percent_comment < 15:
                         comment_level='low'
-                    else:
+                        self._ppt.replace_text(f'{{app{app_no+1}_comment_hl}}',comment_level)
+                    if percent_comment in range(15, 20):
                         comment_level='good'
+                        self._ppt.replace_text(f'{{app{app_no+1}_comment_hl}}',comment_level)
+                    else:
+                        comment_level='high'
+                        self._ppt.replace_text(f'{{app{app_no+1}_comment_hl}}',comment_level)
                     self._ppt.replace_text(f'{{app{app_no+1}_comment_level}}',comment_level)
                     self._ppt.replace_text(f'{{app{app_no+1}_comment_pct}}',percent_comment)
                     self._ppt.replace_text(f'{{app{app_no+1}_comment_out_pct}}',percent_comment_out)
