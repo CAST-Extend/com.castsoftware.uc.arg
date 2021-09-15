@@ -145,9 +145,10 @@ class AipData(AipRestCall):
 
                         compliance=grade_set[0]['result']['score']*100
 
-                        temp = temp[temp['result.grade']<=2]
-                        # Get Top 3 rules, based on least number of Grade present for the RULE/Name of the Rule 
-                        # temp = temp[temp['result.grade']<=2].head(3)
+                        # temp = temp[temp['result.grade']<=2]
+                        # Get Top 3 rules, based on max weight of Failed check logic  
+                        temp = temp.sort_values('result.violationRatio.failedChecks', ascending = False).head(3)
+                        
                         detail = "\n".join(temp['reference.name'].tolist())
                         total=int(agr.iloc[0]['result.violationRatio.totalChecks'])
                         if total == 0:
