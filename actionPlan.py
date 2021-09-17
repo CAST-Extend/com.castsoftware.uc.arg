@@ -14,7 +14,7 @@ class ActionPlan:
     _effort_df = None
     _output_folder = None
 
-    _day_rate=600
+    _day_rate=1600
 
     __extrm_effort = 0
     __high_effort = 0
