@@ -175,6 +175,7 @@ class GeneratePPT(Logger):
         # create instance of action plan class 
         ap = ActionPlan (self._app_list,self._aip_data,self._ppt,self._output_folder)
 
+        summary_total_cost = 0
         
 
         for app_no in range(0,app_cnt):
@@ -218,7 +219,6 @@ class GeneratePPT(Logger):
             summary_data = DataFrame()
             summary_bus_txt = ''
             summary_vio_txt = ''
-            summary_total_cost = 0
 
             if self._generate_AIP:
                 if self._aip_data.has_data(app_id):
