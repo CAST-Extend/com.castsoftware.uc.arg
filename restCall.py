@@ -169,7 +169,6 @@ class AipData(AipRestCall):
                         ]                
                 except (KeyError):
                     self.logger.warn(f'Key Error while aggregating {ind_name}')
-                # print (df)
 
         # for ind in indicators:
         #     key = ind['key']
