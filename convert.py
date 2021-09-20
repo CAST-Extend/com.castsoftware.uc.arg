@@ -205,10 +205,10 @@ class GeneratePPT(Logger):
             mid_bus_txt = ''
             mid_vio_txt = ''
 
-            low_eff = low_cost = low_vio_cnt = 0
-            low_data = DataFrame()
-            low_bus_txt = ''
-            low_vio_txt = ''
+            # low_eff = low_cost = low_vio_cnt = 0
+            # low_data = DataFrame()
+            # low_bus_txt = ''
+            # low_vio_txt = ''
 
             long_term_eff = long_term_cost = long_term_vio_cnt = 0
             long_term_data = DataFrame()
@@ -262,17 +262,18 @@ class GeneratePPT(Logger):
                     self._ppt.update_table(f'app{app_no+1}_imp_table',imp_df,include_index=False,background='RGB')
 
                     """
-                        Fill Lines of Code information
+                        Populate the document insites page
+                        The necessary data is found in the loc_tbl
+
+                        This section fetches data for Documentation slide, excludes certain columns, sorts with few column, 
+                        and based on score of particular element seggregates colors(Red, Yellow & Green) and update to app1_doc_table element.
+                        255,168,168 - Red shades
+                        255,234,168 - Yellow shades
+                        168,228,195 - Green shades
                     """
-                    # This section fetches data for Documentation slide, excludes certain columns, sorts with few column, 
-                    # and based on score of particular element seggregates colors(Red, Yellow & Green) and update to app1_doc_table element.
-                    # 255,168,168 - Red shades
-                    # 255,234,168 - Yellow shades
-                    # 168,228,195 - Green shades
                     doc_df = self._aip_data.doc_compliance(app_id)
                     doc_df.drop(columns=['Key','Total','Weight'],inplace=True) #'Detail',
                     doc_df.sort_values(by=['Score','Rule'], inplace=True)
-                    # doc_df['RGB'] = np.where(doc_df.Score >= 3,'168,228,195',np.where(doc_df.Score < 2,'255,168,168','255,234,168'))
                     doc_df['RGB'] = np.where(doc_df.Score >= 3,'194,236,213',np.where(doc_df.Score < 2,'255,210,210','255,240,194'))
                     doc_df.Score = doc_df.Score.map('{:.2f}'.format)
                     self._ppt.update_table(f'app{app_no+1}_doc_table',doc_df,include_index=False,background='RGB')
@@ -290,13 +291,12 @@ class GeneratePPT(Logger):
                         255,168,168 - Red shades
                         255,234,168 - Yellow shades
                         168,228,195 - Green shades
-                    """
                     doc_df = self._aip_data.doc_compliance(app_id)
-                    doc_df.drop(columns=['Key','Total','Weight'],inplace=True) #'Detail',
                     doc_df.sort_values(by=['Score','Rule'], inplace=True)
                     doc_df['RGB'] = np.where(doc_df.Score >= 3,'194,236,213',np.where(doc_df.Score < 2,'255,210,210','255,240,194'))
                     doc_df.Score = doc_df.Score.map('{:.2f}'.format)
                     self._ppt.update_table(f'app{app_no+1}_doc_table',doc_df,include_index=False,background='RGB')
+                    """
 
                     loc_tbl = pd.DataFrame.from_dict(data=self._aip_data.get_loc_sizing(app_id),orient='index').drop('Critical Violations')
                     loc_tbl = loc_tbl.rename(columns={0:'loc'})
@@ -382,12 +382,12 @@ class GeneratePPT(Logger):
                     self._ppt.replace_text(f'{{app{app_no+1}_aip_low_bus_txt}}',aip_low_bus_txt)
                     self._ppt.replace_text(f'{{app{app_no+1}_aip_low_vio_txt}}',aip_low_vio_txt)
 
-                    aip_long_term_data = pd.concat([low_data,mid_data],ignore_index=True)
+                    aip_long_term_data = pd.concat([aip_low_data,aip_mid_term_data],ignore_index=True)
                     aip_long_term_bus_txt = util.list_to_text(ap.business_criteria(aip_long_term_data)) + ' '
                     aip_long_term_vio_txt = ap.list_violations(aip_long_term_data)
-                    aip_long_term_eff = int(mid_eff) + int(low_eff)
-                    aip_long_term_cost = float(mid_cost) + float(low_cost)
-                    aip_long_term_vio_cnt = int(mid_vio_cnt) + int(low_vio_cnt)
+                    aip_long_term_eff = int(mid_eff) + int(aip_low_eff)
+                    aip_long_term_cost = float(mid_cost) + float(aip_low_cost)
+                    aip_long_term_vio_cnt = int(mid_vio_cnt) + int(aip_low_vio_cnt)
                     self._ppt.replace_text(f'{{app{app_no+1}_aip_lt_eff}}',aip_long_term_eff)
                     self._ppt.replace_text(f'{{app{app_no+1}_aip_lt_cost}}',aip_long_term_cost)
                     self._ppt.replace_text(f'{{app{app_no+1}_aip_lt_vio_cnt}}',aip_long_term_vio_cnt)
