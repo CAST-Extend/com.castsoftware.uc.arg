@@ -69,11 +69,12 @@ class AipData(AipRestCall):
                 raise SystemExit  #connection failed, exit here
             if domain_id is not None:
                 self._data[s]['domain_id']=domain_id
-                self._data[s]['snapshot']=self.get_latest_snapshot(domain_id)
+                snapshot = self.get_latest_snapshot(domain_id)
+                self._data[s]['snapshot']=snapshot
                 if self._data[s]['snapshot']:
                     self._data[s]['has data'] = True
-                    self._data[s]['tqi_compliance']=self.aggregate_violation_ratio(s,'60017',self._imp_list)
-                    self._data[s]['doc_compliance']=self.aggregate_violation_ratio(s,'60017',self._doc_list)
+                    self._data[s]['tqi_compliance']=self.aggregate_violation_ratio(domain_id,snapshot['id'],'60017',self._imp_list)
+                    self._data[s]['doc_compliance']=self.aggregate_violation_ratio(domain_id,snapshot['id'],'66033',self._doc_list,False)
                     self._data[s]['grades']=self.get_grades_by_technology(domain_id,self._data[s]['snapshot'])
                     self._data[s]['sizing']=self.get_sizing_by_technology(domain_id,self._data[s]['snapshot'],self._sizing)
                     self._data[s]['loc_sizing']=self.get_sizing(domain_id,self._sizing) 
@@ -114,13 +115,13 @@ class AipData(AipRestCall):
     def doc_compliance(self, app):
         return self.data(app)['doc_compliance']
 
-    def aggregate_violation_ratio(self,app,key,sub_keys,crit_only=True):
-        self.debug(f'aggregating violation ration information for {app}')
-        sid = self.snapshot(app)['id']
-        domain_id = self.domain(app)
-
+    def aggregate_violation_ratio(self,domain_id, snapshot_id,key,sub_keys,crit_only=True):
+        # self.debug(f'aggregating violation ration information for {app}')
+        # sid = self.snapshot(app)['id']
+        # domain_id = self.domain(app)
+        
         df = DataFrame(columns=['Key','Rule','Detail','Weight','Total','Failed','Succeeded','Compliance','Score'])
-        indicators = self.get_quality_indicators(domain_id,sid, key)
+        indicators = self.get_quality_indicators(domain_id,snapshot_id, key)
 
         for ind in indicators:
             ind_key = ind['key']
@@ -131,7 +132,8 @@ class AipData(AipRestCall):
                 try:
                     if vr:
                         temp = json_normalize(vr)
-                        temp = temp[temp['reference.critical']==True]
+                        if crit_only:
+                            temp = temp[temp['reference.critical']==True]
                         agr = temp.agg({ 
                             'result.violationRatio.totalChecks': ['sum'], 
                             'result.violationRatio.failedChecks': ['sum'], 
@@ -143,7 +145,10 @@ class AipData(AipRestCall):
 
                         compliance=grade_set[0]['result']['score']*100
 
-                        temp = temp[temp['result.grade']<=2]
+                        # temp = temp[temp['result.grade']<=2]
+                        # Get Top 3 rules, based on max weight of Failed check logic  
+                        temp = temp.sort_values('result.violationRatio.failedChecks', ascending = False).head(3)
+                        
                         detail = "\n".join(temp['reference.name'].tolist())
                         total=int(agr.iloc[0]['result.violationRatio.totalChecks'])
                         if total == 0:
@@ -164,7 +169,6 @@ class AipData(AipRestCall):
                         ]                
                 except (KeyError):
                     self.logger.warn(f'Key Error while aggregating {ind_name}')
-                # print (df)
 
         # for ind in indicators:
         #     key = ind['key']
