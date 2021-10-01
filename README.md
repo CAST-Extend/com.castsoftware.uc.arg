@@ -2,10 +2,17 @@
 The script is used to generate a PowerPoint deck from the provided template. This version includes part of the executive summary, the health and action plan pages.  
 
 ## Installation
-* Download the package from github at https://github.com/CAST-Extend/assessment/archive/v1.0.0.tar.gz and explode it into a folder on your local file system.
-* Included in the package is a requirements text file, run it: 
+* Download and unpack the latest release of the Assessment Deck  Generation Tool from https://github.com/CAST-Extend/com.castsoftware.uc.arg/releases
+   * Source Code (zip) 
+   * com.castsoftware.uc.python.common.zip 
 
-      pip install -r requrements.txt
+* Unpack the Source Code zip file (arg)
+* Unpack the com.castsoftware.uc.python.common.zip into a separate folder
+* Install/update required third party packages. 
+    * Open a command prompt
+    * Go to the Source Code folder 
+    * run: pip install -r requrements.txt
+* make sure the <com.castsoftware.uc.python.common>/src folder is included in the PYTHONPATH enviroment variable
 
 ## Usage
 The script is designed to run on the command line using one parameter, --config, used to identify the project and applications to include in the presentation.
