@@ -31,6 +31,8 @@ class GeneratePPT(Logger):
     _project_name = None
     _template = None
 
+    _FileName = None
+
     _generate_HL = _hl_base_url = _hl_user = hl_pswd = None
     _generate_AIP = _aip_base_url = _aip_user = _aip_pswd = None
     _hl_instance = None
@@ -41,7 +43,9 @@ class GeneratePPT(Logger):
         super().__init__("convert")
         self.read_config(config)
 
-        out = f"{self._output_folder}/{self._project_name}.pptx"
+        #out = f"{self._output_folder}/{self._project_name}.pptx"
+
+        out = f"{self._output_folder}/{self._FileName}.pptx"
         self.info(f'Generating {out}')
 
 
@@ -90,6 +94,9 @@ class GeneratePPT(Logger):
         """
 
         # TODO: handle undefined entries
+
+        self._FileName = "Project " + config.get('project').data + " - Tech DD Findings" #modified by MAU 28-9-21
+
         self._project_name = config.get('project').data
         self._template = config.get('template').data
         self._app_list = config.get('appl.list').data.strip().split(',')
@@ -231,6 +238,8 @@ class GeneratePPT(Logger):
                     grade_all = self._aip_data.get_app_grades(app_id)
                     self._ppt.replace_risk_factor(grade_all,app_no)
                     grade_by_tech_df = self._aip_data.get_grade_by_tech(app_id)
+                    
+
 
                     self._ppt.update_table(f'app{app_no+1}_grade_by_tech_table',grade_by_tech_df.drop(['Documentation'],axis=1))
                     self._ppt.update_chart(f'app{app_no+1}_sizing_pie_chart',grade_by_tech_df['LOC'])
