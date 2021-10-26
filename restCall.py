@@ -328,13 +328,13 @@ class HLData(HLRestCall):
 
             app_id = self.get_app_id(hl_app_name)
             if app_id:
-                self.__data[s]['cloud']=DataFrame(self.get_cloud_data(app_id))
                 (lic,cves,total_components) = self.get_third_party(app_id)
-
+                
                 self.__data[s]['has data'] = True
                 self.__data[s]['app_id']=app_id
                 self.__data[s]['cves']=cves
                 self.__data[s]['licenses']=lic
+
                 if cves.empty:
                     self.__data[s]['cve_crit_tot']=0
                     self.__data[s]['cve_crit_comp_tot']=0
@@ -399,8 +399,6 @@ class HLData(HLRestCall):
     def get_oss_cmpn_tot(self,app_id):
         return self.__data[app_id]['total_components']
         
-    def get_cloud_info(self,app_id):
-        return self.__data[app_id]['cloud']
 
     def get_third_party_info(self,app_id):
         return DataFrame(self.__data[app_id]['components'])
@@ -519,98 +517,91 @@ class HLData(HLRestCall):
 
         return
 
-    def get_cves(self,app_name,type='all'):
-        df = self.__data[app_name]['cves']
-        if type=='all':
-            return df
-        else:
-            return df.loc[df['criticity'].str.lower()==type]
+    def get_cves(self, components, type, limit = 0):
+        """
+        Returns CVE info for a give app, if there are Critical, High and medium CVEs.
+        Unless the 'all' argument is provided, High CVEs are returned only when there are no/not enough critical CVEs
+        to fill the slide. Similarly, medium CVEs are returned only where there are no/limited critical or high CVEs.
 
-    # def get_cves(self, components, type, limit = 0):
-    #     """
-    #     Returns CVE info for a give app, if there are Critical, High and medium CVEs.
-    #     Unless the 'all' argument is provided, High CVEs are returned only when there are no/not enough critical CVEs
-    #     to fill the slide. Similarly, medium CVEs are returned only where there are no/limited critical or high CVEs.
+        Note that low CVEs are ignored for assessment purposes.
+        """
 
-    #     Note that low CVEs are ignored for assessment purposes.
-    #     """
+        _cve_df = DataFrame()
+        sev_type = type.lower()
 
-    #     _cve_df = DataFrame()
-    #     sev_type = type.lower()
+        # If the request is for critical sev CVEs, override the limit and return all rows.
+        if sev_type == 'critical':
+            limit = 0
 
-    #     # If the request is for critical sev CVEs, override the limit and return all rows.
-    #     if sev_type == 'critical':
-    #         limit = 0
+        # Do we have the data retrieved for the app? If not, auto-retrieve.
+        # If all == False, limit the number of CVEs returned.
 
-    #     # Do we have the data retrieved for the app? If not, auto-retrieve.
-    #     # If all == False, limit the number of CVEs returned.
+        # try:
+        #     self._get_third_party(app_id)
+        # except:
+        #     print('ERROR - no thirdparty data')
+        #     raise
 
-    #     # try:
-    #     #     self._get_third_party(app_id)
-    #     # except:
-    #     #     print('ERROR - no thirdparty data')
-    #     #     raise
-
-    #     cve_df = components.loc[:, ['name', 'cve']]
-    #     cve_df.dropna(axis = 0, how = 'any', inplace = True)
+        cve_df = components.loc[:, ['name', 'cve']]
+        cve_df.dropna(axis = 0, how = 'any', inplace = True)
 
 
-    #     i = 0
-    #     prev_comp = ''
-    #     comp_changed = False
+        i = 0
+        prev_comp = ''
+        comp_changed = False
 
-    #     for tup in self._cve_df.itertuples():
-    #         crit_cve_str, high_cve_str, med_cve_str = '', '', ''
-    #         comp_name = tup[1]
+        for tup in self._cve_df.itertuples():
+            crit_cve_str, high_cve_str, med_cve_str = '', '', ''
+            comp_name = tup[1]
 
-    #         for cve in tup[2]['vulnerabilities']:
-    #             # If critical sev is the type requested, also grab high and medium sev CVEs for the same component.
-    #             # Similarly, if high sev is the type requested, also grab medium sev CVEs for the same component.
-    #             criticality = cve['criticity'].lower()
+            for cve in tup[2]['vulnerabilities']:
+                # If critical sev is the type requested, also grab high and medium sev CVEs for the same component.
+                # Similarly, if high sev is the type requested, also grab medium sev CVEs for the same component.
+                criticality = cve['criticity'].lower()
 
-    #             # Ignore components with low criticality, as we do not need to report those.
-    #             if criticality == 'low':
-    #                 continue
+                # Ignore components with low criticality, as we do not need to report those.
+                if criticality == 'low':
+                    continue
 
-    #             # Note that are not considering the type requested here, but simply storing the CVE in its
-    #             # appropriate slot. That part is handled further below, before they are added to the dataframe.
-    #             if criticality == 'critical':
-    #                 crit_cve_str += cve['name'] + ', '
-    #             if criticality == 'high':
-    #                 high_cve_str += cve['name'] + ', '
-    #             elif criticality == 'medium':
-    #                 med_cve_str += cve['name'] + ', '
+                # Note that are not considering the type requested here, but simply storing the CVE in its
+                # appropriate slot. That part is handled further below, before they are added to the dataframe.
+                if criticality == 'critical':
+                    crit_cve_str += cve['name'] + ', '
+                if criticality == 'high':
+                    high_cve_str += cve['name'] + ', '
+                elif criticality == 'medium':
+                    med_cve_str += cve['name'] + ', '
 
-    #         # Before adding the results into the dataframe, ensure that we have matches for the
-    #         # crticality requested. For example, if critical CVEs were requested, we should have
-    #         # values in the crit_cve_str. # If not, do not add.
-    #         if sev_type == 'critical' and len(crit_cve_str) > 0 or \
-    #             sev_type == 'high' and len(high_cve_str) > 0    or \
-    #             sev_type == 'medium' and len(med_cve_str) > 0:
+            # Before adding the results into the dataframe, ensure that we have matches for the
+            # crticality requested. For example, if critical CVEs were requested, we should have
+            # values in the crit_cve_str. # If not, do not add.
+            if sev_type == 'critical' and len(crit_cve_str) > 0 or \
+                sev_type == 'high' and len(high_cve_str) > 0    or \
+                sev_type == 'medium' and len(med_cve_str) > 0:
 
-    #             # Strip the comma-spaces at the end of the CVE strings.
-    #             crit_cve_str = crit_cve_str[:-2]
-    #             high_cve_str = high_cve_str[:-2]
-    #             med_cve_str = med_cve_str[:-2]
+                # Strip the comma-spaces at the end of the CVE strings.
+                crit_cve_str = crit_cve_str[:-2]
+                high_cve_str = high_cve_str[:-2]
+                med_cve_str = med_cve_str[:-2]
 
-    #             if len(crit_cve_str) == 0:
-    #                 crit_cve_str = 'N/A'
-    #             if len(high_cve_str) == 0:
-    #                 high_cve_str = 'N/A'
-    #             if len(med_cve_str) == 0:
-    #                 med_cve_str = 'N/A'
+                if len(crit_cve_str) == 0:
+                    crit_cve_str = 'N/A'
+                if len(high_cve_str) == 0:
+                    high_cve_str = 'N/A'
+                if len(med_cve_str) == 0:
+                    med_cve_str = 'N/A'
 
-    #             _cve_df = _cve_df.append({'Component Name': comp_name, 'Critical Sev CVEs': crit_cve_str,
-    #                         'High Sev CVEs': high_cve_str, 'Medium Sev CVEs': med_cve_str}, ignore_index = True)
+                _cve_df = _cve_df.append({'Component Name': comp_name, 'Critical Sev CVEs': crit_cve_str,
+                            'High Sev CVEs': high_cve_str, 'Medium Sev CVEs': med_cve_str}, ignore_index = True)
 
-    #         i += 1
+            i += 1
 
-    #         # Return only the max number of rows requested. In case the sev type is critical, always return all rows.
-    #         if (limit > 0) and (i == limit):
-    #             break
+            # Return only the max number of rows requested. In case the sev type is critical, always return all rows.
+            if (limit > 0) and (i == limit):
+                break
 
-    #     #print(_cve_df)
-    #     return _cve_df
+        #print(_cve_df)
+        return _cve_df
 
     def get_lics(self, app_id, type = 'high', limit = 0):
         """
