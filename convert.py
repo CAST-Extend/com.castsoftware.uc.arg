@@ -21,6 +21,42 @@ import argparse
 import json
 import datetime
 
+class Config():
+    __logger = Logger("Config")
+
+    def __init__(self, config):
+        """
+        Read entries from the config file and save the values in class/instance vars.
+        """
+        properties = Properties()
+        with open(config, 'rb') as config_file:
+            properties.load(config_file)
+
+        # TODO: handle undefined entries
+        self.project_name = properties.get('project').data
+        self.template = properties.get('template').data
+        self.app_list = properties.get('appl.list').data.strip().split(',')
+        self.appl_title = json.loads(properties.get('appl.title').data)
+        self.output_folder = properties.get('output.folder').data
+        self.hl_base_url = properties.get('hl.base_url').data
+        self.hl_user = properties.get('hl.user').data
+        self.hl_pswd = properties.get('hl.pswd').data
+        self.hl_instance = properties.get('hl.instance').data
+
+        #set default values
+        self.hl_app_list = {}
+        self.appl_title = {}
+        for appl in self.app_list:
+            #test the application title list, if not found set it to the list value 
+            try:
+                test = self.appl_title[appl]
+            except (KeyError):
+                self.appl_title[appl]=appl
+            try:
+                test = self.hl_app_list[appl]
+            except (KeyError):
+                self.hl_app_list[appl]=appl
+
 
 class GeneratePPT(Logger):
     _app_list = []
@@ -401,6 +437,12 @@ class GeneratePPT(Logger):
                     summary_cost = float(aip_fix_now_cost) + float(aip_near_term_cost)
                     summary_vio_cnt = int(aip_fix_now_vio_cnt) + int(aip_near_term_vio_cnt)
 
+                    fix_now_eff = int(aip_fix_now_eff) 
+                    fix_now_cost = round(aip_fix_now_cost,2)
+                    near_term_eff = int(aip_near_term_eff)
+                    near_term_cost = round(aip_near_term_cost,2)
+
+
             #replaceHighlight application specific data
             if self._generate_HL and self._hl_data.has_data(app_id):
                 lic_df=self._hl_data.get_lic_info(app_id)
@@ -496,31 +538,22 @@ class GeneratePPT(Logger):
                 self._ppt.replace_text(f'{{app{app_no+1}_hl_fn_eff}}',crit_cve_eff)
                 self._ppt.replace_text(f'{{app{app_no+1}_hl_nt_eff}}',int(high_cve_eff + med_cve_eff))
 
-                self._ppt.replace_text(f'{{app{app_no+1}_fn_tot_cost}}',fix_now_cost)
-                self._ppt.replace_text(f'{{app{app_no+1}_fn_tot_eff}}',fix_now_eff)
+                """
+                    Cloud ready excel sheet generation
+                """
+                cloud = self._hl_data.get_cloud_info(app_id)
+                cloud = cloud[['cloudRequirement.display','Technology','cloudRequirement.ruleType','cloudRequirement.criticality','contributionScore','roadblocks']]
+                file_name = f'{self._output_folder}/cloud-{self._appl_title[app_id]}.xlsx'
+                writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
+                col_widths=[50,10,10,10,10,10,10]
+                cloud_tab = util.format_table(writer,cloud,'Cloud Data',col_widths)
+                writer.save()
 
-                self._ppt.replace_text(f'{{app{app_no+1}_nt_tot_cost}}',near_term_cost)
-                self._ppt.replace_text(f'{{app{app_no+1}_nt_tot_eff}}',near_term_eff)
+            self._ppt.replace_text(f'{{app{app_no+1}_fn_tot_cost}}',fix_now_cost)
+            self._ppt.replace_text(f'{{app{app_no+1}_fn_tot_eff}}',fix_now_eff)
 
-            # if not self._generate_AIP and self._generate_HL:
-            #     #This deck is for HL only, lets make some adjustments
-            #     fix_now_bus_txt=near_term_bus_txt=long_term_bus_txt=None
-
-            #both AIP and HL data
-            # ap.fill_action_plan_tags(app_no,'fix_now', \
-            #     fix_now_eff, fix_now_cost, fix_now_vio_cnt,fix_now_bus_txt,fix_now_vio_txt)
-            # ap.fill_action_plan_tags(app_no,'near_term', \
-            #     near_term_eff, near_term_cost, near_term_vio_cnt,near_term_bus_txt,near_term_vio_txt)
-            # ap.fill_action_plan_tags(app_no,'long_term', \
-            #     long_term_eff, long_term_cost, long_term_vio_cnt,long_term_bus_txt,long_term_vio_txt)
-            # ap.fill_action_plan_tags(app_no,'mid', mid_eff, mid_cost, mid_vio_cnt,mid_bus_txt,mid_vio_txt)
-            # ap.fill_action_plan_tags(app_no,'low', low_eff, low_cost, low_vio_cnt,low_bus_txt,low_vio_txt)
-
-            # ap.fill_action_plan_tags(app_no,'summary', \
-            #     summary_eff, summary_cost, summary_vio_cnt,summary_bus_txt,summary_vio_txt)
-
-            # ap.fill_action_plan_tags(app_no,'summary', \
-            #     summary_eff, summary_cost, summary_vio_cnt,summary_bus_txt,summary_vio_txt)
+            self._ppt.replace_text(f'{{app{app_no+1}_nt_tot_cost}}',near_term_cost)
+            self._ppt.replace_text(f'{{app{app_no+1}_nt_tot_eff}}',near_term_eff)
 
             summary_total_cost = summary_total_cost + summary_cost
             self._ppt.replace_text(f'{{app{app_no+1}_summary_eff}}',summary_eff)
@@ -583,11 +616,11 @@ class GeneratePPT(Logger):
         self._ppt.update_table(f'app{app_no+1}_tech_sizing',sizing_df)
 
 if __name__ == '__main__':
-    print('\nCAST Assessment Deck Generation Tool')
+    print('\nCAST Assessment Report Generation (ARG)')
     print('Copyright (c) 2021 CAST Software Inc.\n')
-    print('If you need assistance, please contact Nevin Kaplan (NKA) or Guru Pai (GPR) from the CAST US PS team\n')
+    print('If you need assistance, please contact Nevin Kaplan (NKA) from the CAST US PS team\n')
 
-    parser = argparse.ArgumentParser(description='Assessment Deck Generation Tool')
+    parser = argparse.ArgumentParser(description='CAST Assessment Report Generation (ARG)')
     parser.add_argument('-c','--config', required=True, help='Configuration properties file')
     args = parser.parse_args()
 
