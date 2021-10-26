@@ -141,7 +141,7 @@ class PowerPoint:
         return rgb
 
 
-    def replace_text (self, search_str, repl_str, tbd_for_blanks=True,slide=None):
+    def replace_text (self, search_str, repl_str, tbd_for_blanks=True):
         if tbd_for_blanks:
             skip = False
             omit_list = ["immediate_action","other","risk_detail"]
@@ -155,18 +155,14 @@ class PowerPoint:
             if not skip and len(str(repl_str)) == 0:
                 repl_str = 'TBD'
 
-        if slide is None:
-            for s in self._prs.slides:
-                self.replace_slide_text(s, search_str, repl_str)
-        else:
+        for slide in self._prs.slides:
             self.replace_slide_text(slide, search_str, repl_str)
 
     def replace_slide_text (self, slide, search_str, repl_str):
         for shape in slide.shapes:
             if shape.has_text_frame:
                 for paragraph in shape.text_frame.paragraphs:
-                    if search_str in paragraph.text:
-                        self.replace_paragraph_text(paragraph,search_str,repl_str)
+                    self.replace_paragraph_text(paragraph,search_str,repl_str)
             elif shape.has_table:
                 tbl=shape.table
                 row_count = len(tbl.rows)
@@ -178,10 +174,7 @@ class PowerPoint:
                             self.replace_paragraph_text(paragraph,search_str,repl_str)
 
     def replace_paragraph_text (self, paragraph, search_str, repl_str):
-        """
-            search all the runs in a paragraph and replace the search_str with repl_str
-        """
-        if search_str in paragraph.text:
+        if paragraph.text.find(search_str)!=-1:
             t_parags = len(paragraph.runs)
             for run_idx in range(t_parags):
                 run = paragraph.runs[run_idx]
@@ -204,22 +197,31 @@ class PowerPoint:
                                self.delete_run(paragraph.runs[i]) 
                             self.replace_paragraph_text(paragraph, search_str, repl_str)
                             break
-                        
+
+
+                
+    
+    # original - kinda working
+    # def replace_paragraph_text (self, paragraph, search_str, repl_str):
+    #     if paragraph.text.find(search_str)!=-1:
+    #         cur_text=''
+    #         first=True
+    #         for run in paragraph.runs:
+    #             cur_text = cur_text + run.text
+    #             if first != True:
+    #                 self.delete_run(run)
+    #             first=False
+    #         run = paragraph.runs[0]
+    #         run.text = cur_text.replace(str(search_str), str(repl_str))
 
     def replace_shape_name (self, slide, search_str, repl_str):
         for shape in slide.shapes:
             if shape.name.find(search_str) != -1: 
                 shape.name = shape.name.replace(search_str,repl_str)
 
-    def get_slide_by_shape(self,shape):
-        slide = shape
-        while True:
-            if type(slide).__name__ == 'Slide':
-                break
-            slide = slide._parent
-        return slide
-
     def get_shape_by_name(self, name, use_slide=None):
+        rslt = None
+
         slides = self._prs.slides
         if use_slide != None:
             slides = [use_slide] 
@@ -227,16 +229,8 @@ class PowerPoint:
         for slide in slides:
             for shape in slide.shapes:
                 if shape.name == name:
-                    return shape
-        return None
-
-    def rename_shape(self, slide, old_name, new_name):
-        for shape in slide.shapes:
-            if shape.name == old_name:
-                shape.name = new_name
-                return True
-                break
-        return False
+                    rslt = shape
+        return rslt
 
     def merge_runs(self, paragraph):
         cur_text=''
@@ -369,71 +363,14 @@ class PowerPoint:
                             new_text = text_prefix + repl_text + text_suffix
                             run.text = run.text.replace(run_text,new_text)
 
-    def find_group(self, slide=None):
-        block = []
-
-        slides = []
-        if slide is not None:
-            slides = [slide] 
-        else:
-            slides = self._prs.slides
-
-        on_slide = None
-        on_paragraph = None
-        paragraph_start = None
-
-        grps=[]
-        for slide in slides:
-            for shape in slide.shapes:
-                if shape.has_text_frame:
-                    for pno,paragraph in enumerate(shape.text_frame.paragraphs):
-                        if '{group:' in paragraph.text:
-                            if '{/group' in paragraph.text:
-                                grp={}
-
-                                (grp_nm, istart, iend, ostart,oend) = util.get_between(paragraph.text,"{group:","}")
-                                # mark the beginning of the block
-                                grp['name']=grp_nm
-                                grp['shape']=shape
-                                grp['paragraph']=pno
-                                grp['text outer start']=ostart
-                                grp['text inner start']=istart
-                               
-                                (grp_bdy, istart, iend, ostart,oend) = util.get_between(paragraph.text,"}",f"{{/group:{grp_nm}}}")
-                                grp['body']=grp_bdy
-                                grp['text outer end']=oend
-                                grp['text inner end']=iend
-
-                                grps.append(grp)
-
-        return grps
-
-
-                                    
-
-
-
-
-
-
-
-        return block
-
-    def copy_block(self, tag, prefix, count,slide=None):
+    def copy_block(self, tag, prefix, count):
         search_start = f'{{{tag}}}'
         search_end = f'{{end_{tag}}}'
 
         block = []
 
-        slides = []
-        if slide is not None:
-            slides = [slide] 
-        else:
-            slides = self._prs.slides
-
-
         found=False
-        for slide in slides:
+        for slide in self._prs.slides:
             for shape in slide.shapes:
                 if shape.has_text_frame:
                     for paragraph in shape.text_frame.paragraphs:
@@ -516,8 +453,6 @@ class PowerPoint:
             size_catagory = 'large'
         self.replace_text(f'{{app{app_no}_loc_category}}',size_catagory)
 
-    
- 
     def duplicate_slides(self, app_cnt):
         for cnt in range(2,app_cnt+1):
             for idx, slide in enumerate(self._prs.slides):
@@ -538,15 +473,8 @@ class PowerPoint:
                             self.replace_slide_text(slide,"{app_per_page}","")
 
     
-    def copy_slide(self,index=-1,template=None):
-        if index<0 and template is None:
-            raise KeyError('invalid parameters: either index or template are required')
-
-        if template is not None:
-            source = template
-        else:
-            source = self._prs.slides[index]
-
+    def copy_slide(self,index):
+        source = self._prs.slides[index]
         blank_slide_layout = source.slide_layout
         dest = self._prs.slides.add_slide(blank_slide_layout)
 
@@ -583,6 +511,12 @@ class PowerPoint:
                     sp = placeholder._sp
                     sp.getparent().remove(sp)
 
+    def get_shape_parent(self,shape):
+        rslt = None
+        if hasattr(shape,'_parent'):
+            rslt = shape._parent
+        return rslt
+
     def delete_paragraph(self,paragraph):
         p = paragraph._p
         parent_element = p.getparent()
@@ -608,32 +542,6 @@ class PowerPoint:
         xml_slides = self._prs.slides._sldIdLst  
         slides = list(xml_slides)
         xml_slides.remove(slides[index])  
-
-    def get_shape_parent(self,shape):
-        rslt = None
-        if hasattr(shape,'_parent'):
-            rslt = shape._parent
-        return rslt
-
-    def copy_paragraph(self,src,dst):
-        dst.alignment = src.alignment
-        dst.level = src.level
-        dst.line_spacing = src.line_spacing
-        dst.space_after = src.space_after
-        dst.space_before = src.space_before
-
-        for r in src.runs:    
-            run = dst.add_run()
-            run.text = deepcopy(r.text)
-            font = run.font
-            font.name = r.font.name
-            font.size = r.font.size
-            font.bold = r.font.bold
-            font.italic = r.font.italic
-            if hasattr(r.font.color, 'rgb'):
-                font.color.rgb = r.font.color.rgb
-
-
 
     def save(self):
         self._prs.save(self._output)
