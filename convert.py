@@ -437,6 +437,12 @@ class GeneratePPT(Logger):
                     summary_cost = float(aip_fix_now_cost) + float(aip_near_term_cost)
                     summary_vio_cnt = int(aip_fix_now_vio_cnt) + int(aip_near_term_vio_cnt)
 
+                    fix_now_eff = int(aip_fix_now_eff) 
+                    fix_now_cost = round(aip_fix_now_cost,2)
+                    near_term_eff = int(aip_near_term_eff)
+                    near_term_cost = round(aip_near_term_cost,2)
+
+
             #replaceHighlight application specific data
             if self._generate_HL and self._hl_data.has_data(app_id):
                 lic_df=self._hl_data.get_lic_info(app_id)
@@ -532,12 +538,6 @@ class GeneratePPT(Logger):
                 self._ppt.replace_text(f'{{app{app_no+1}_hl_fn_eff}}',crit_cve_eff)
                 self._ppt.replace_text(f'{{app{app_no+1}_hl_nt_eff}}',int(high_cve_eff + med_cve_eff))
 
-                self._ppt.replace_text(f'{{app{app_no+1}_fn_tot_cost}}',fix_now_cost)
-                self._ppt.replace_text(f'{{app{app_no+1}_fn_tot_eff}}',fix_now_eff)
-
-                self._ppt.replace_text(f'{{app{app_no+1}_nt_tot_cost}}',near_term_cost)
-                self._ppt.replace_text(f'{{app{app_no+1}_nt_tot_eff}}',near_term_eff)
-
                 """
                     Cloud ready excel sheet generation
                 """
@@ -548,6 +548,12 @@ class GeneratePPT(Logger):
                 col_widths=[50,10,10,10,10,10,10]
                 cloud_tab = util.format_table(writer,cloud,'Cloud Data',col_widths)
                 writer.save()
+
+            self._ppt.replace_text(f'{{app{app_no+1}_fn_tot_cost}}',fix_now_cost)
+            self._ppt.replace_text(f'{{app{app_no+1}_fn_tot_eff}}',fix_now_eff)
+
+            self._ppt.replace_text(f'{{app{app_no+1}_nt_tot_cost}}',near_term_cost)
+            self._ppt.replace_text(f'{{app{app_no+1}_nt_tot_eff}}',near_term_eff)
 
             summary_total_cost = summary_total_cost + summary_cost
             self._ppt.replace_text(f'{{app{app_no+1}_summary_eff}}',summary_eff)
