@@ -1,4 +1,4 @@
-from logging import info, warn
+from logging import DEBUG, info, warn
 from pandas.core.frame import DataFrame
 from restCall import AipRestCall
 from restCall import AipData
@@ -77,12 +77,11 @@ class GeneratePPT(Logger):
         super().__init__("convert")
         self.read_config(config)
 
-        out = f"{self._output_folder}/{self._project_name}.pptx"
+        out = f"{self._output_folder}/Project {self._project_name} - Tech DD Findings.pptx"
         self.info(f'Generating {out}')
 
 
         # TODO: Handle cases where on HL data is needed and not AIP.
-
         if self._generate_AIP:
             self.info("Collecting AIP Data")
             self._aip_data = AipData(self._aip_base_url, self._aip_user, self._aip_pswd, self._app_list)
@@ -90,11 +89,11 @@ class GeneratePPT(Logger):
             self.info("Collecting Highlight Data")
             self._hl_data = HLData(self._hl_base_url, self._hl_user, self._hl_pswd, self._hl_instance, self._app_list,self._hl_app_list)
 
-        self._ppt = PowerPoint(self._template, out)
+        self._ppt = PowerPoint(self._template, out,DEBUG)
         #project level work
         app_cnt = len(self._app_list)
 
-        self.remove_proc_slides(self._generate_procs)
+        # self.remove_proc_slides(self._generate_procs)
 
         self._ppt.duplicate_slides(app_cnt)
         self._ppt.copy_block("each_app",["app"],app_cnt)
@@ -212,7 +211,6 @@ class GeneratePPT(Logger):
         ap = ActionPlan (self._app_list,self._aip_data,self._ppt,self._output_folder)
 
         summary_total_cost = 0
-        
 
         for app_no in range(0,app_cnt):
             # replace application specific AIP data
@@ -264,11 +262,15 @@ class GeneratePPT(Logger):
                     risk_grades = util.each_risk_factor(self._ppt, self._aip_data,app_id, app_no)
                     self._ppt.replace_text(f'{{app{app_no+1}_high_risk_grade_names}}',util.list_to_text(risk_grades.index.values))
 
+
+                    # Technical Overview - Technical details TABLE
                     grade_all = self._aip_data.get_app_grades(app_id)
                     self._ppt.replace_risk_factor(grade_all,app_no)
                     grade_by_tech_df = self._aip_data.get_grade_by_tech(app_id)
+                    grades = grade_by_tech_df.drop(['Documentation',"ISO","ISO_EFF","ISO_MAINT","ISO_REL","ISO_SEC"],axis=1)
+                    self._ppt.update_table(f'app{app_no+1}_grade_by_tech_table',grades)
 
-                    self._ppt.update_table(f'app{app_no+1}_grade_by_tech_table',grade_by_tech_df.drop(['Documentation'],axis=1))
+                    # Technical Overview - Lines of code by technology GRAPH
                     self._ppt.update_chart(f'app{app_no+1}_sizing_pie_chart',grade_by_tech_df['LOC'])
 
                     snapshot = self._aip_data.snapshot(app=app_id)
@@ -341,15 +343,14 @@ class GeneratePPT(Logger):
 
                     percent_comment = loc_tbl.loc['Number of Comment Lines','percent']
                     percent_comment_out = loc_tbl.loc['Number of Commented-out Code Lines','percent']
+
                     if percent_comment < 15:
                         comment_level='low'
-                        self._ppt.replace_text(f'{{app{app_no+1}_comment_hl}}',comment_level)
                     if percent_comment in range(15, 20):
                         comment_level='good'
-                        self._ppt.replace_text(f'{{app{app_no+1}_comment_hl}}',comment_level)
                     else:
                         comment_level='high'
-                        self._ppt.replace_text(f'{{app{app_no+1}_comment_hl}}',comment_level)
+                    self._ppt.replace_text(f'{{app{app_no+1}_comment_hl}}',comment_level)
                     self._ppt.replace_text(f'{{app{app_no+1}_comment_level}}',comment_level)
                     self._ppt.replace_text(f'{{app{app_no+1}_comment_pct}}',percent_comment)
                     self._ppt.replace_text(f'{{app{app_no+1}_comment_out_pct}}',percent_comment_out)
@@ -382,12 +383,12 @@ class GeneratePPT(Logger):
                         ap.get_extreme_costing()
                     aip_fix_now_bus_txt = util.list_to_text(ap.business_criteria(aip_fix_now_data)) + ' '
                     aip_fix_now_vio_txt = ap.list_violations(aip_fix_now_data)
+
                     self._ppt.replace_text(f'{{app{app_no+1}_aip_fn_eff}}',aip_fix_now_eff)
                     self._ppt.replace_text(f'{{app{app_no+1}_aip_fn_cost}}',aip_fix_now_cost)
                     self._ppt.replace_text(f'{{app{app_no+1}_aip_fn_vio_cnt}}',aip_fix_now_vio_cnt)
                     self._ppt.replace_text(f'{{app{app_no+1}_aip_fn_bus_txt}}',aip_fix_now_bus_txt)
                     self._ppt.replace_text(f'{{app{app_no+1}_aip_fn_vio_txt}}',aip_fix_now_vio_txt)
-                        
 
                     (aip_near_term_eff, aip_near_term_cost, aip_near_term_vio_cnt, aip_near_term_data) = \
                         ap.get_high_costing()
@@ -441,6 +442,19 @@ class GeneratePPT(Logger):
                     fix_now_cost = round(aip_fix_now_cost,2)
                     near_term_eff = int(aip_near_term_eff)
                     near_term_cost = round(aip_near_term_cost,2)
+
+                    """
+                        ISO-5055 slide
+                            - most of the work is being done in the restCall class
+                            - use iso_rules to retrieve the data
+                            - add it to the app1_iso5055 table in the template
+                    """
+                    iso_df = self._aip_data.iso_rules(app_id)
+                    iso_df.loc[iso_df['violation']=='','background']='205,218,226'
+                    iso_df.loc[iso_df['violation']!='','background']='255,255,255'
+                    self._ppt.update_table(f'app{app_no+1}_iso5055',iso_df,
+                                           include_index=False,background='background')
+
 
 
             #replaceHighlight application specific data
@@ -541,13 +555,16 @@ class GeneratePPT(Logger):
                 """
                     Cloud ready excel sheet generation
                 """
-                cloud = self._hl_data.get_cloud_info(app_id)
-                cloud = cloud[['cloudRequirement.display','Technology','cloudRequirement.ruleType','cloudRequirement.criticality','contributionScore','roadblocks']]
-                file_name = f'{self._output_folder}/cloud-{self._appl_title[app_id]}.xlsx'
-                writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
-                col_widths=[50,10,10,10,10,10,10]
-                cloud_tab = util.format_table(writer,cloud,'Cloud Data',col_widths)
-                writer.save()
+                try:
+                    cloud = self._hl_data.get_cloud_info(app_id)
+                    cloud = cloud[['cloudRequirement.display','Technology','cloudRequirement.ruleType','cloudRequirement.criticality','contributionScore','roadblocks']]
+                    file_name = f'{self._output_folder}/cloud-{self._appl_title[app_id]}.xlsx'
+                    writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
+                    col_widths=[50,10,10,10,10,10,10]
+                    cloud_tab = util.format_table(writer,cloud,'Cloud Data',col_widths)
+                    writer.save()
+                except Exception as e:
+                    self.error(f'unknown error while processing cloud ready data: {e}')
 
             self._ppt.replace_text(f'{{app{app_no+1}_fn_tot_cost}}',fix_now_cost)
             self._ppt.replace_text(f'{{app{app_no+1}_fn_tot_eff}}',fix_now_eff)
@@ -579,7 +596,6 @@ class GeneratePPT(Logger):
         self._ppt.replace_text('{hml_cost_flag}',hml_cost_flg)  
 
         self._ppt.replace_text('{daily_rate}',ap._day_rate)  
-
 
     def fill_critical_rules(self,app_no):
         app_id = self._app_list[app_no]

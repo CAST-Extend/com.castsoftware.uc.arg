@@ -7,6 +7,9 @@ from pptx.parts.embeddedpackage import EmbeddedXlsxPart
 from pptx.dml.color import ColorFormat, RGBColor
 from pptx.enum.dml import MSO_THEME_COLOR
 
+from logger import Logger
+from logging import INFO, error
+
 import util
 
 from copy import deepcopy
@@ -15,22 +18,25 @@ import pandas as pd
 import logging
 
 
-class PowerPoint:
+
+class PowerPoint (Logger):
     _input = None
     _output = None
     _prs = None
 
-    def __init__(self,input, output):
-       self._input=input 
-       self._output=output
+    def __init__(self,input, output,log_level=INFO):
+        super().__init__("RestCall",log_level)
 
-       self._prs = Presentation(self._input)
+        self._input=input 
+        self._output=output
 
-       self._logger = logging.getLogger(__name__)
-       shandler = logging.StreamHandler()
-       formatter = logging.Formatter('%(asctime)s - %(filename)s [%(funcName)30s:%(lineno)-4d] %(levelname)-8s - %(message)s')
-       shandler.setFormatter(formatter)
-       self._logger.addHandler(shandler)
+        self._prs = Presentation(self._input)
+
+        # self._logger = logging.getLogger(__name__)
+        # shandler = logging.StreamHandler()
+        # formatter = logging.Formatter('%(asctime)s - %(filename)s [%(funcName)30s:%(lineno)-4d] %(levelname)-8s - %(message)s')
+        # shandler.setFormatter(formatter)
+        # self.addHandler(shandler)
 
     def replace_risk_factor(self, grades, app_no=0, search_str=None):
         if search_str == None:
@@ -71,7 +77,7 @@ class PowerPoint:
                                         cur_text = cur_text.replace(f'{search_str}{g}}}',risk)
                                         run.text = cur_text
                                     except KeyError:
-                                        self._logger.debug(f'invalid key: {g}')
+                                        self.debug(f'invalid key: {g}')
                                         break;
 
     def replace_grade(self, grades,app_no=0, search_str=None):
@@ -127,8 +133,10 @@ class PowerPoint:
                 chart_data.categories = ['grade']
                 chart_data.add_series('Series 1', data)
                 shape.chart.replace_data(chart_data)
-        except AttributeError:
-            self._logger.debug(f'Invalid template configuration: {name}')
+        except AttributeError as ae:
+            self.debug(f'Attribute Error, invalid template configuration: {name} ({ae})')
+        except KeyError as ke:
+            self.debug(f'Key Error, invalid template configuration: {name} ({ke})')
 
     def get_grade_color(self,grade):
         rgb = 0
@@ -280,7 +288,7 @@ class PowerPoint:
                     cell.fill.solid()
                     cell.fill.fore_color.rgb = RGBColor(int(rgb[0]), int(rgb [1]), int(rgb[2]))
                 except IndexError:
-                    self._logger.warn('index error in update_table while setting background color')
+                    self.warning('index error in update_table while setting background color')
     
     def set_table_font_color(self,table,colors,rows,cols,has_header):
         for row in range(rows):
@@ -296,7 +304,7 @@ class PowerPoint:
                     run = self.merge_runs(paragraph)
                     run.font.color.rgb=RGBColor(int(rgb[0]), int(rgb [1]), int(rgb[2]))
                 except IndexError:
-                    self._logger.warn('index error in update_table while setting background color')
+                    self.warning('index error in update_table while setting background color')
 
     def update_table(self, name, df, include_index=True, background=None, forground=None, has_header=True):
         table_shape = self.get_shape_by_name(name)
@@ -304,7 +312,7 @@ class PowerPoint:
             table=table_shape.table
 
             colnames = list(df.columns)
-            self._logger.info(f'filling table {name} with {len(df.index)} rows of data')
+            self.debug(f'filling table {name} with {len(df.index)} rows of data')
 
             # Insert the row zero names
             if include_index:
@@ -318,7 +326,7 @@ class PowerPoint:
                         run = self.merge_runs(cell.text_frame.paragraphs[0])
                         run.text = text
                     except IndexError:
-                        self._logger.warn(f'index error in update_table ({name}) while setting df index')
+                        self.warning(f'index error in update_table ({name}) while setting df index')
             rows, cols = df.shape
             if background:
                 cols = cols-1
@@ -331,7 +339,7 @@ class PowerPoint:
                 try:
                     self.set_table_font_color(table,df[forground],rows,cols,has_header)
                 except (KeyError):
-                    self._logger.warn(f'error setting forground for {name}')
+                    self.warning(f'error setting forground for {name}')
 
             m = df.values
             for row in range(rows):
@@ -353,7 +361,7 @@ class PowerPoint:
                         run = self.merge_runs(cell.text_frame.paragraphs[0])
                         run.text = text
                     except IndexError:
-                        self._logger.warn(f'index error in update_table ({name}) while setting values')
+                        self.warning(f'index error in update_table ({name}) while setting values')
 
     def replace_block(self, begin_tag, end_tag, repl_text):
         for slide in self._prs.slides:
@@ -556,24 +564,26 @@ class PowerPoint:
             dest.shapes._spTree.insert_element_before(newel, 'p:extLst')
 
         for key, value in source.part.rels.items():
-            # Make sure we don't copy a notesSlide relation as that won't exist
-            if "notesSlide" not in value.reltype:
-                target = value._target
-                # if the relationship was a chart, we need to duplicate the embedded chart part and xlsx
-                if "chart" in value.reltype:
-                    partname = target.package.next_partname(
-                        ChartPart.partname_template)
-                    xlsx_blob = target.chart_workbook.xlsx_part.blob
-                    target = ChartPart(partname, target.content_type,
-                                    deepcopy(target._element), package=target.package)
+            try:
+                # Make sure we don't copy a notesSlide relation as that won't exist
+                if "notesSlide" not in value.reltype:
+                    target = value._target
+                    # if the relationship was a chart, we need to duplicate the embedded chart part and xlsx
+                    if "chart" in value.reltype:
+                        partname = target.package.next_partname(
+                            ChartPart.partname_template)
+                        xlsx_blob = target.chart_workbook.xlsx_part.blob
+                        target = ChartPart(partname, target.content_type,
+                                        deepcopy(target._element), package=target.package)
 
-                    target.chart_workbook.xlsx_part = EmbeddedXlsxPart.new(
-                        xlsx_blob, target.package)
+                        target.chart_workbook.xlsx_part = EmbeddedXlsxPart.new(
+                            xlsx_blob, target.package)
 
-                dest.part.rels.add_relationship(value.reltype,
-                                                target,
-                                                value.rId)
-
+                    dest.part.rels.add_relationship(value.reltype,
+                                                    target,
+                                                    value.rId)
+            except AttributeError as err:
+                self.logger.error(f'Attribute Error {err} while copying slide {index} part {key}')
         return dest
 
     def remove_empty_placeholders(self):
@@ -632,8 +642,6 @@ class PowerPoint:
             font.italic = r.font.italic
             if hasattr(r.font.color, 'rgb'):
                 font.color.rgb = r.font.color.rgb
-
-
 
     def save(self):
         self._prs.save(self._output)
