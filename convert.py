@@ -11,7 +11,7 @@ from pptx.dml.color import RGBColor
 from actionPlan import ActionPlan
 from logger import Logger
 from IPython.display import display
-
+from config import Config
 
 import pandas as pd
 import numpy as np 
@@ -21,9 +21,7 @@ import argparse
 import json
 import datetime
 
-
 class GeneratePPT(Logger):
-    _app_list = []
     _ppt = None
     _aip_data = None
     _effort_df = None
@@ -38,24 +36,22 @@ class GeneratePPT(Logger):
     _hl_app_list = []
 
     def __init__(self, config):
-        super().__init__("convert")
-        self.read_config(config)
-
-        out = f"{self._output_folder}/Project {self._project_name} - Tech DD Findings.pptx"
+        super().__init__()
+        out = f"{config.output}/Project {config.project} - Tech DD Findings.pptx"
         self.info(f'Generating {out}')
 
 
         # TODO: Handle cases where on HL data is needed and not AIP.
-        if self._generate_AIP:
+        if config.aip_active:
             self.info("Collecting AIP Data")
-            self._aip_data = AipData(self._aip_base_url, self._aip_user, self._aip_pswd, self._app_list)
-        if self._generate_HL:
+            self._aip_data = AipData(config)
+        if config.hl_active:
             self.info("Collecting Highlight Data")
-            self._hl_data = HLData(self._hl_base_url, self._hl_user, self._hl_pswd, self._hl_instance, self._app_list,self._hl_app_list)
+            self._hl_data = HLData(config)
 
-        self._ppt = PowerPoint(self._template, out,DEBUG)
+        self._ppt = PowerPoint(config.template, out)
         #project level work
-        app_cnt = len(self._app_list)
+        app_cnt = len(config.application)
 
         # self.remove_proc_slides(self._generate_procs)
 
@@ -64,7 +60,7 @@ class GeneratePPT(Logger):
 
         self._ppt.replace_text("{app#_","{app1_")
 
-        self.replace_all_text(app_cnt)
+        self.replace_all_text(config)
 
     def remove_proc_slides(self,keep_it):
         indexes=[]
@@ -83,70 +79,72 @@ class GeneratePPT(Logger):
     def save_ppt(self):
         self._ppt.save()
 
-    def read_config(self, config):
-        """
-        Read entries from the config file and save the values in class/instance vars.
-        """
+    # def read_config(self, config):
+    #     """
+    #     Read entries from the config file and save the values in class/instance vars.
+    #     """
 
-        # TODO: handle undefined entries
-        self._project_name = config.get('project').data
-        self._template = config.get('template').data
-        self._app_list = config.get('appl.list').data.strip().split(',')
-        self._appl_title = json.loads(config.get('appl.title').data)
-        self._hl_app_list = json.loads(config.get('appl.highlight').data)
+    #     # TODO: handle undefined entries
+    #     self._project_name = config.get('project').data
+    #     self._template = config.get('template').data
+    #     self._app_list = config.get('appl.list').data.strip().split(',')
+    #     self._appl_title = json.loads(config.get('appl.title').data)
+    #     self._hl_app_list = json.loads(config.get('appl.highlight').data)
 
-        #set default values
-        for appl in self._app_list:
-            #test the application title list, if not found set it to the list value 
-            try:
-                test = self._appl_title[appl]
-            except (KeyError):
-                self._appl_title[appl]=appl
-            try:
-                test = self._hl_app_list[appl]
-            except (KeyError):
-                self._hl_app_list[appl]=appl
+    #     #set default values
+    #     for appl in self._app_list:
+    #         #test the application title list, if not found set it to the list value 
+    #         try:
+    #             test = self._appl_title[appl]
+    #         except (KeyError):
+    #             self._appl_title[appl]=appl
+    #         try:
+    #             test = self._hl_app_list[appl]
+    #         except (KeyError):
+    #             self._hl_app_list[appl]=appl
 
-            #test the application highlight list, if not found set it to the list value 
-            try:
-                test = self._hl_app_list[appl]
-            except (KeyError):
-                self._hl_app_list[appl]=appl
-            try:
-                test = self._hl_app_list[appl]
-            except (KeyError):
-                self._hl_app_list[appl]=appl
+    #         #test the application highlight list, if not found set it to the list value 
+    #         try:
+    #             test = self._hl_app_list[appl]
+    #         except (KeyError):
+    #             self._hl_app_list[appl]=appl
+    #         try:
+    #             test = self._hl_app_list[appl]
+    #         except (KeyError):
+    #             self._hl_app_list[appl]=appl
 
 
-        self._output_folder = config.get('output.folder').data
+    #     self._output_folder = config.get('output.folder').data
 
-        self._generate_AIP = config.get('output.aip').data
-        self._generate_HL = config.get('output.hl').data
-        #self._generate_procs = config.get('output.procs').data
-        self._generate_procs=False
+    #     self._generate_AIP = config.get('output.aip').data
+    #     self._generate_HL = config.get('output.hl').data
+    #     #self._generate_procs = config.get('output.procs').data
+    #     self._generate_procs=False
         
-        if self._generate_HL.lower() == 'yes':
-            self._generate_HL = True
-            self._hl_base_url = config.get('hl.base_url').data
-            self._hl_user = config.get('hl.user').data
-            self._hl_pswd = config.get('hl.pswd').data
-            self._hl_instance = config.get('hl.instance').data
-            # self._hl_app_list={}
-            # self._hl_app_list = json.loads(config.get('hl.application.list').data)
-        else:     
-            self._generate_HL = False
+    #     if self._generate_HL.lower() == 'yes':
+    #         self._generate_HL = True
+    #         self._hl_base_url = config.get('hl.base_url').data
+    #         self._hl_user = config.get('hl.user').data
+    #         self._hl_pswd = config.get('hl.pswd').data
+    #         self._hl_instance = config.get('hl.instance').data
+    #         # self._hl_app_list={}
+    #         # self._hl_app_list = json.loads(config.get('hl.application.list').data)
+    #     else:     
+    #         self._generate_HL = False
 
-        if self._generate_AIP.lower() == 'yes':
-            self._generate_AIP = True
-            self._aip_base_url = config.get('aip.base_url').data
-            self._aip_user = config.get('aip.user').data
-            self._aip_pswd = config.get('aip.pswd').data
-        else:     
-            self._generate_AIP = False
+    #     if self._generate_AIP.lower() == 'yes':
+    #         self._generate_AIP = True
+    #         self._aip_base_url = config.get('aip.base_url').data
+    #         self._aip_user = config.get('aip.user').data
+    #         self._aip_pswd = config.get('aip.pswd').data
+    #     else:     
+    #         self._generate_AIP = False
 
-    def replace_all_text(self,app_cnt):
-        self._ppt.replace_text("{project}", self._project_name)
+    def replace_all_text(self,config):
+        app_cnt = len(config.application)
+        self._ppt.replace_text("{project}", config.project)
         self._ppt.replace_text("{app_count}",app_cnt)
+        self._ppt.replace_text("{company}",config.company)
 
         mydate = datetime.datetime.now()
         month = mydate.strftime("%B")
@@ -155,9 +153,9 @@ class GeneratePPT(Logger):
         self._ppt.replace_text("{year}",year)
 
         # replace AIP data global to all applications
-        if self._generate_AIP:
+        if config.aip_active:
             all_apps_avg_grade = self._aip_data.calc_grades_all_apps()
-            self._ppt.replace_text("{all_apps}",self._aip_data.get_all_app_text())
+#            self._ppt.replace_text("{all_apps}",self._aip_data.get_all_app_text())
             self._ppt.replace_risk_factor(all_apps_avg_grade,search_str="{summary_")
             risk_grades = self._aip_data.calc_health_grades_high_risk(all_apps_avg_grade)
             if risk_grades.empty:
@@ -171,16 +169,23 @@ class GeneratePPT(Logger):
                 self._ppt.replace_text("{end_immediate_action}","") 
                 self._ppt.replace_text("{high_risk_grade_names}",self._aip_data.text_from_list(risk_grades.index.values.tolist()))
 
+        app_list = config.aip_list
+        hl_list = config.hl_list
+        title_list = config.title_list
+
         # create instance of action plan class 
-        ap = ActionPlan (self._app_list,self._aip_data,self._ppt,self._output_folder)
+        ap = ActionPlan (app_list,self._aip_data,self._ppt,config.output)
 
         summary_total_cost = 0
 
-        for app_no in range(0,app_cnt):
+        for idx in range(0,app_cnt):
             # replace application specific AIP data
-            app_id = self._app_list[app_no]
-            self.info(f'Working on pages for {self._appl_title[app_id]}')
-            self._ppt.replace_text(f'{{app{app_no+1}_name}}',self._appl_title[app_id])
+            app_no = idx+1
+            app_id = app_list[idx]
+            hl_id = hl_list[idx]
+            app_title = title_list[idx]
+            self.info(f'Working on pages for {app_title}')
+            self._ppt.replace_text(f'{{app{app_no}_name}}',app_title)
 
             aip_fix_now_eff = aip_fix_now_cost = aip_fix_now_vio_cnt = 0
             aip_near_term_eff = aip_near_term_cost = aip_near_term_vio_cnt = 0
@@ -218,13 +223,13 @@ class GeneratePPT(Logger):
             summary_bus_txt = ''
             summary_vio_txt = ''
 
-            if self._generate_AIP:
+            if config.aip_active:
                 if self._aip_data.has_data(app_id):
                     #self.info(f'Working on {app_id} ({self._appl_title[app_id]})')
 
                     # do risk factors for the executive summary page
                     risk_grades = util.each_risk_factor(self._ppt, self._aip_data,app_id, app_no)
-                    self._ppt.replace_text(f'{{app{app_no+1}_high_risk_grade_names}}',util.list_to_text(risk_grades.index.values))
+                    self._ppt.replace_text(f'{{app{app_no}_high_risk_grade_names}}',util.list_to_text(risk_grades.index.values))
 
 
                     # Technical Overview - Technical details TABLE
@@ -232,21 +237,21 @@ class GeneratePPT(Logger):
                     self._ppt.replace_risk_factor(grade_all,app_no)
                     grade_by_tech_df = self._aip_data.get_grade_by_tech(app_id)
                     grades = grade_by_tech_df.drop(['Documentation',"ISO","ISO_EFF","ISO_MAINT","ISO_REL","ISO_SEC"],axis=1)
-                    self._ppt.update_table(f'app{app_no+1}_grade_by_tech_table',grades)
+                    self._ppt.update_table(f'app{app_no}_grade_by_tech_table',grades)
 
                     # Technical Overview - Lines of code by technology GRAPH
-                    self._ppt.update_chart(f'app{app_no+1}_sizing_pie_chart',grade_by_tech_df['LOC'])
+                    self._ppt.update_chart(f'app{app_no}_sizing_pie_chart',grade_by_tech_df['LOC'])
 
                     snapshot = self._aip_data.snapshot(app=app_id)
                     # app_name = snapshot['name']
-                    # self._ppt.replace_text(f'{{app{app_no+1}_name}}',app_name)
-                    self._ppt.replace_text(f'{{app{app_no+1}_all_technogies}}',util.list_to_text(snapshot['technology']))
+                    # self._ppt.replace_text(f'{{app{app_no}_name}}',app_name)
+                    self._ppt.replace_text(f'{{app{app_no}_all_technogies}}',util.list_to_text(snapshot['technology']))
 
                     #calculate high and medium risk factors
                     risk_grades = self._aip_data.calc_health_grades_high_risk(grade_all)
                     if risk_grades.empty:
                         risk_grades = self._aip_data.calc_health_grades_medium_risk(grade_all)
-                    self._ppt.replace_text(f'{{app{app_no+1}_at_risk_grade_names}}',util.list_to_text(risk_grades.index.tolist()).lower())
+                    self._ppt.replace_text(f'{{app{app_no}_at_risk_grade_names}}',util.list_to_text(risk_grades.index.tolist()).lower())
 
 
                     """
@@ -254,14 +259,20 @@ class GeneratePPT(Logger):
                         The necessary data is found in the loc_tbl
                     """
                     imp_df = self._aip_data.tqi_compliance(app_id)
-                    imp_df.drop(columns=['Key','Total','Weight'],inplace=True)
-                    imp_df.sort_values(by=['Score','Rule'], inplace=True)
-                    # imp_df['RGB'] = np.where(imp_df.Score >= 3,'168,228,195',\
-                        # np.where(imp_df.Score < 2,'255,168,168','255,234,168'))
+                    imp_df.drop(columns=['Key','Total','Weight','Compliance'],inplace=True)
+                    imp_df.sort_values(by=['Score','Rule'], inplace=True, ascending = False)
+
+                    file_name = f'{config.output}/health-{title_list[idx]}.xlsx'
+                    writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
+                    col_widths=[50,50,10,10,10]
+                    cloud_tab = util.format_table(writer,imp_df,'Health Data',col_widths)
+                    writer.save()
+
+                    imp_df.drop(columns=['Detail'],inplace=True)
                     imp_df['RGB'] = np.where(imp_df.Score >= 3,'194,236,213',\
                         np.where(imp_df.Score < 2,'255,210,210','255,240,194'))
                     imp_df.Score = imp_df.Score.map('{:.2f}'.format)
-                    self._ppt.update_table(f'app{app_no+1}_imp_table',imp_df,include_index=False,background='RGB')
+                    self._ppt.update_table(f'app{app_no}_imp_table',imp_df,include_index=False,background='RGB')
 
                     """
                         Populate the document insites page
@@ -278,11 +289,11 @@ class GeneratePPT(Logger):
                     doc_df.sort_values(by=['Score','Rule'], inplace=True)
                     doc_df['RGB'] = np.where(doc_df.Score >= 3,'194,236,213',np.where(doc_df.Score < 2,'255,210,210','255,240,194'))
                     doc_df.Score = doc_df.Score.map('{:.2f}'.format)
-                    self._ppt.update_table(f'app{app_no+1}_doc_table',doc_df,include_index=False,background='RGB')
+                    self._ppt.update_table(f'app{app_no}_doc_table',doc_df,include_index=False,background='RGB')
                     
                     loc_df = self._aip_data.get_loc_sizing(app_id)
                     loc = loc_df['Number of Code Lines']
-                    self._ppt.replace_loc(loc,app_no+1)
+                    self._ppt.replace_loc(loc,app_no)
 
                     """
                         Populate the document insites page
@@ -297,7 +308,7 @@ class GeneratePPT(Logger):
                     doc_df.sort_values(by=['Score','Rule'], inplace=True)
                     doc_df['RGB'] = np.where(doc_df.Score >= 3,'194,236,213',np.where(doc_df.Score < 2,'255,210,210','255,240,194'))
                     doc_df.Score = doc_df.Score.map('{:.2f}'.format)
-                    self._ppt.update_table(f'app{app_no+1}_doc_table',doc_df,include_index=False,background='RGB')
+                    self._ppt.update_table(f'app{app_no}_doc_table',doc_df,include_index=False,background='RGB')
                     """
 
                     loc_tbl = pd.DataFrame.from_dict(data=self._aip_data.get_loc_sizing(app_id),orient='index').drop('Critical Violations')
@@ -314,19 +325,19 @@ class GeneratePPT(Logger):
                         comment_level='good'
                     else:
                         comment_level='high'
-                    self._ppt.replace_text(f'{{app{app_no+1}_comment_hl}}',comment_level)
-                    self._ppt.replace_text(f'{{app{app_no+1}_comment_level}}',comment_level)
-                    self._ppt.replace_text(f'{{app{app_no+1}_comment_pct}}',percent_comment)
-                    self._ppt.replace_text(f'{{app{app_no+1}_comment_out_pct}}',percent_comment_out)
+                    self._ppt.replace_text(f'{{app{app_no}_comment_hl}}',comment_level)
+                    self._ppt.replace_text(f'{{app{app_no}_comment_level}}',comment_level)
+                    self._ppt.replace_text(f'{{app{app_no}_comment_pct}}',percent_comment)
+                    self._ppt.replace_text(f'{{app{app_no}_comment_out_pct}}',percent_comment_out)
 
                     loc_tbl['percent']=pd.Series(["{0:.2f}%".format(val) for val in loc_tbl['percent']], index = loc_tbl.index)
-                    self._ppt.update_table(f'app{app_no+1}_loc_table',loc_tbl,has_header=False)
-                    self._ppt.update_chart(f'app{app_no+1}_loc_pie_chart',loc_tbl['loc'])
+                    self._ppt.update_table(f'app{app_no}_loc_table',loc_tbl,has_header=False)
+                    self._ppt.update_chart(f'app{app_no}_loc_pie_chart',loc_tbl['loc'])
 
-                    self._ppt.replace_grade(grade_all,app_no+1)
+                    self._ppt.replace_grade(grade_all,app_no)
 
-                    self.fill_sizing(app_no)
-                    self.fill_critical_rules(app_no)
+                    self.fill_sizing(app_id,app_no)
+                    self.fill_critical_rules(app_id,app_no)
 
 
                     """
@@ -339,8 +350,8 @@ class GeneratePPT(Logger):
                             3. Long term contains medium and low violation data
                             4. Excecutive Summary contains fix now and high violation data
                     """
-                    ap.fill_action_plan(app_no)
-                    self.fill_violations(app_no)
+                    ap.fill_action_plan(app_id,app_no)
+                    self.fill_violations(app_id,app_no)
 
                     #calculate and print aip fix now action plan midigation items
                     (aip_fix_now_eff, aip_fix_now_cost, aip_fix_now_vio_cnt, aip_fix_now_data) = \
@@ -348,40 +359,40 @@ class GeneratePPT(Logger):
                     aip_fix_now_bus_txt = util.list_to_text(ap.business_criteria(aip_fix_now_data)) + ' '
                     aip_fix_now_vio_txt = ap.list_violations(aip_fix_now_data)
 
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_fn_eff}}',aip_fix_now_eff)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_fn_cost}}',aip_fix_now_cost)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_fn_vio_cnt}}',aip_fix_now_vio_cnt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_fn_bus_txt}}',aip_fix_now_bus_txt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_fn_vio_txt}}',aip_fix_now_vio_txt)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_fn_eff}}',aip_fix_now_eff)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_fn_cost}}',aip_fix_now_cost)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_fn_vio_cnt}}',aip_fix_now_vio_cnt)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_fn_bus_txt}}',aip_fix_now_bus_txt)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_fn_vio_txt}}',aip_fix_now_vio_txt)
 
                     (aip_near_term_eff, aip_near_term_cost, aip_near_term_vio_cnt, aip_near_term_data) = \
                         ap.get_high_costing()
                     aip_near_term_bus_txt = util.list_to_text(ap.business_criteria(aip_near_term_data)) + ' '
                     aip_near_term_vio_txt = ap.list_violations(aip_near_term_data)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_nt_eff}}',aip_near_term_eff)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_nt_cost}}',aip_near_term_cost)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_nt_vio_cnt}}',aip_near_term_vio_cnt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_nt_bus_txt}}',aip_near_term_bus_txt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_nt_vio_txt}}',aip_near_term_vio_txt)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_nt_eff}}',aip_near_term_eff)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_nt_cost}}',aip_near_term_cost)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_nt_vio_cnt}}',aip_near_term_vio_cnt)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_nt_bus_txt}}',aip_near_term_bus_txt)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_nt_vio_txt}}',aip_near_term_vio_txt)
 
 
                     (aip_mid_term_eff, aip_mid_term_cost, aip_mid_term_vio_cnt, aip_mid_term_data) = ap.get_med_costing()
                     aip_mid_term_bus_txt = util.list_to_text(ap.business_criteria(aip_mid_term_data)) + ' '
                     aip_mid_term_vio_txt = ap.list_violations(aip_mid_term_data)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_mt_eff}}',aip_mid_term_eff)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_mt_cost}}',aip_mid_term_cost)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_mt_vio_cnt}}',aip_mid_term_vio_cnt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_mt_bus_txt}}',aip_mid_term_bus_txt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_mt_vio_txt}}',aip_mid_term_vio_txt)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_mt_eff}}',aip_mid_term_eff)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_mt_cost}}',aip_mid_term_cost)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_mt_vio_cnt}}',aip_mid_term_vio_cnt)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_mt_bus_txt}}',aip_mid_term_bus_txt)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_mt_vio_txt}}',aip_mid_term_vio_txt)
 
                     (aip_low_eff, aip_low_cost, aip_low_vio_cnt, aip_low_data) = ap.get_low_costing()
                     aip_low_bus_txt = util.list_to_text(ap.business_criteria(aip_low_data)) + ' '
                     aip_low_vio_txt = ap.list_violations(aip_low_data)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_low_eff}}',aip_low_eff)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_low_cost}}',aip_low_cost)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_low_vio_cnt}}',aip_low_vio_cnt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_low_bus_txt}}',aip_low_bus_txt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_low_vio_txt}}',aip_low_vio_txt)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_low_eff}}',aip_low_eff)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_low_cost}}',aip_low_cost)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_low_vio_cnt}}',aip_low_vio_cnt)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_low_bus_txt}}',aip_low_bus_txt)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_low_vio_txt}}',aip_low_vio_txt)
 
                     aip_long_term_data = pd.concat([aip_low_data,aip_mid_term_data],ignore_index=True)
                     aip_long_term_bus_txt = util.list_to_text(ap.business_criteria(aip_long_term_data)) + ' '
@@ -389,11 +400,11 @@ class GeneratePPT(Logger):
                     aip_long_term_eff = int(mid_eff) + int(aip_low_eff)
                     aip_long_term_cost = float(mid_cost) + float(aip_low_cost)
                     aip_long_term_vio_cnt = int(mid_vio_cnt) + int(aip_low_vio_cnt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_lt_eff}}',aip_long_term_eff)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_lt_cost}}',aip_long_term_cost)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_lt_vio_cnt}}',aip_long_term_vio_cnt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_lt_bus_txt}}',aip_long_term_bus_txt)
-                    self._ppt.replace_text(f'{{app{app_no+1}_aip_lt_vio_txt}}',aip_long_term_vio_txt)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_lt_eff}}',aip_long_term_eff)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_lt_cost}}',aip_long_term_cost)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_lt_vio_cnt}}',aip_long_term_vio_cnt)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_lt_bus_txt}}',aip_long_term_bus_txt)
+                    self._ppt.replace_text(f'{{app{app_no}_aip_lt_vio_txt}}',aip_long_term_vio_txt)
 
                     summary_data = pd.concat([aip_fix_now_data,aip_near_term_data],ignore_index=True)
                     summary_bus_txt = util.list_to_text(ap.business_criteria(summary_data)) + ' '
@@ -416,36 +427,36 @@ class GeneratePPT(Logger):
                     iso_df = self._aip_data.iso_rules(app_id)
                     iso_df.loc[iso_df['violation']=='','background']='205,218,226'
                     iso_df.loc[iso_df['violation']!='','background']='255,255,255'
-                    self._ppt.update_table(f'app{app_no+1}_iso5055',iso_df,
+                    self._ppt.update_table(f'app{app_no}_iso5055',iso_df,
                                            include_index=False,background='background')
             #replaceHighlight application specific data
-            if self._generate_HL and self._hl_data.has_data(app_id):
-                lic_df=self._hl_data.get_lic_info(app_id)
+            if config.hl_active and self._hl_data.has_data(hl_id):
+                lic_df=self._hl_data.get_lic_info(hl_id)
                 lic_df=self._hl_data.sort_lic_info(lic_df)
-                oss_df=self._hl_data.get_cve_info(app_id)
+                oss_df=self._hl_data.get_cve_info(hl_id)
                 lic_summary = pd.DataFrame(columns=['License Type','Risk Factor','Component Count','Example'])
 
-                crit_cve = self._hl_data.get_cve_crit_tot(app_id)
-                crit_comp_tot = self._hl_data.get_cve_crit_comp_tot(app_id)
+                crit_cve = self._hl_data.get_cve_crit_tot(hl_id)
+                crit_comp_tot = self._hl_data.get_cve_crit_comp_tot(hl_id)
 
-                high_cve = self._hl_data.get_cve_high_tot(app_id)
-                high_comp_tot = self._hl_data.get_cve_high_comp_tot(app_id)
+                high_cve = self._hl_data.get_cve_high_tot(hl_id)
+                high_comp_tot = self._hl_data.get_cve_high_comp_tot(hl_id)
 
-                med_cve = self._hl_data.get_cve_med_tot(app_id)
-                med_comp_tot = self._hl_data.get_cve_med_comp_tot(app_id)
+                med_cve = self._hl_data.get_cve_med_tot(hl_id)
+                med_comp_tot = self._hl_data.get_cve_med_comp_tot(hl_id)
 
-                oss_cmpnt_tot = self._hl_data.get_oss_cmpn_tot(app_id)
+                oss_cmpnt_tot = self._hl_data.get_oss_cmpn_tot(hl_id)
 
-                self._ppt.replace_text(f'{{app{app_no+1}_crit_sec_tot}}',crit_cve)
-                self._ppt.replace_text(f'{{app{app_no+1}_high_sec_tot}}',high_cve)
-                self._ppt.replace_text(f'{{app{app_no+1}_med_sec_tot}}',med_cve)
+                self._ppt.replace_text(f'{{app{app_no}_crit_sec_tot}}',crit_cve)
+                self._ppt.replace_text(f'{{app{app_no}_high_sec_tot}}',high_cve)
+                self._ppt.replace_text(f'{{app{app_no}_med_sec_tot}}',med_cve)
 
-                self._ppt.replace_text(f'{{app{app_no+1}_crit_cve_comp_ct}}',crit_comp_tot)
-                self._ppt.replace_text(f'{{app{app_no+1}_high_cve_comp_ct}}',high_comp_tot)
-                self._ppt.replace_text(f'{{app{app_no+1}_med_cve_comp_ct}}',med_comp_tot)
+                self._ppt.replace_text(f'{{app{app_no}_crit_cve_comp_ct}}',crit_comp_tot)
+                self._ppt.replace_text(f'{{app{app_no}_high_cve_comp_ct}}',high_comp_tot)
+                self._ppt.replace_text(f'{{app{app_no}_med_cve_comp_ct}}',med_comp_tot)
 
-                self._ppt.replace_text(f'{{app{app_no+1}_high_lic_tot}}',self._hl_data.get_lic_high_tot(app_id))
-                self._ppt.replace_text(f'{{app{app_no+1}_oss_cmpn_tot}}',oss_cmpnt_tot)
+                self._ppt.replace_text(f'{{app{app_no}_high_lic_tot}}',self._hl_data.get_lic_high_tot(hl_id))
+                self._ppt.replace_text(f'{{app{app_no}_oss_cmpn_tot}}',oss_cmpnt_tot)
 
                 if not lic_df.empty:
                     for ln in lic_df['license'].unique():
@@ -467,7 +478,7 @@ class GeneratePPT(Logger):
                     if len(lic_summary.loc[lic_summary['Risk Factor']=='Medium'])>0:
                         lic_summary.loc[lic_summary['Risk Factor']=='Medium','forground']='209,125,13'
 
-                    self._ppt.update_table(f'app{app_no+1}_HL_table_lic_risks',
+                    self._ppt.update_table(f'app{app_no}_HL_table_lic_risks',
                                         lic_summary,include_index=False,
                                         forground='forground')
                 
@@ -476,7 +487,7 @@ class GeneratePPT(Logger):
                     self.info('No license risks found')
 
 
-                self._ppt.update_table(f'app{app_no+1}_HL_table_CVEs',oss_df,include_index=False)
+                self._ppt.update_table(f'app{app_no}_HL_table_CVEs',oss_df,include_index=False)
 
                 if crit_cve is None:
                     crit_cve_eff = 0
@@ -508,55 +519,38 @@ class GeneratePPT(Logger):
                 near_term_eff = int(aip_near_term_eff) + int(high_cve_eff) + int(med_cve_eff)
                 near_term_cost = round(aip_near_term_cost + high_cve_cost + med_cve_cost,2)
 
-                self._ppt.replace_text(f'{{app{app_no+1}_high_sec_tot}}','{high_cve}')
-                self._ppt.replace_text(f'{{app{app_no+1}_med_sec_tot}}','{mid__cve}')
-                self._ppt.replace_text(f'{{app{app_no+1}_hl_fn_eff}}',crit_cve_eff)
-                self._ppt.replace_text(f'{{app{app_no+1}_hl_nt_eff}}',int(high_cve_eff + med_cve_eff))
+                self._ppt.replace_text(f'{{app{app_no}_high_sec_tot}}','{high_cve}')
+                self._ppt.replace_text(f'{{app{app_no}_med_sec_tot}}','{mid__cve}')
+                self._ppt.replace_text(f'{{app{app_no}_hl_fn_eff}}',crit_cve_eff)
+                self._ppt.replace_text(f'{{app{app_no}_hl_nt_eff}}',int(high_cve_eff + med_cve_eff))
 
                 """
                     Cloud ready excel sheet generation
                 """
                 try:
-                    cloud = self._hl_data.get_cloud_info(app_id)
+                    cloud = self._hl_data.get_cloud_info(hl_id)
                     cloud = cloud[['cloudRequirement.display','Technology','cloudRequirement.ruleType','cloudRequirement.criticality','contributionScore','roadblocks']]
-                    file_name = f'{self._output_folder}/cloud-{self._appl_title[app_id]}.xlsx'
+                    file_name = f'{config.output}/cloud-{title_list[idx]}.xlsx'
                     writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
                     col_widths=[50,10,10,10,10,10,10]
                     cloud_tab = util.format_table(writer,cloud,'Cloud Data',col_widths)
                     writer.save()
                 except Exception as e:
-                    self.error(f'unknown error while processing cloud ready data: {e}')
-                self._ppt.replace_text(f'{{app{app_no+1}_fn_tot_cost}}',fix_now_cost)
-                self._ppt.replace_text(f'{{app{app_no+1}_fn_tot_eff}}',fix_now_eff)
+                    self.error(f'unknown error while processing cloud ready data: {str(e)}')
 
-                self._ppt.replace_text(f'{{app{app_no+1}_nt_tot_cost}}',near_term_cost)
-                self._ppt.replace_text(f'{{app{app_no+1}_nt_tot_eff}}',near_term_eff)
+            self._ppt.replace_text(f'{{app{app_no}_fn_tot_cost}}',fix_now_cost)
+            self._ppt.replace_text(f'{{app{app_no}_fn_tot_eff}}',fix_now_eff)
 
-            # if not self._generate_AIP and self._generate_HL:
-            #     #This deck is for HL only, lets make some adjustments
-            #     fix_now_bus_txt=near_term_bus_txt=long_term_bus_txt=None
+            self._ppt.replace_text(f'{{app{app_no}_nt_tot_cost}}',near_term_cost)
+            self._ppt.replace_text(f'{{app{app_no}_nt_tot_eff}}',near_term_eff)
 
-            #both AIP and HL data
-            # ap.fill_action_plan_tags(app_no,'fix_now', \
-            #     fix_now_eff, fix_now_cost, fix_now_vio_cnt,fix_now_bus_txt,fix_now_vio_txt)
-            # ap.fill_action_plan_tags(app_no,'near_term', \
-            #     near_term_eff, near_term_cost, near_term_vio_cnt,near_term_bus_txt,near_term_vio_txt)
-            # ap.fill_action_plan_tags(app_no,'long_term', \
-            #     long_term_eff, long_term_cost, long_term_vio_cnt,long_term_bus_txt,long_term_vio_txt)
-            # ap.fill_action_plan_tags(app_no,'mid', mid_eff, mid_cost, mid_vio_cnt,mid_bus_txt,mid_vio_txt)
-            # ap.fill_action_plan_tags(app_no,'low', low_eff, low_cost, low_vio_cnt,low_bus_txt,low_vio_txt)
-            # ap.fill_action_plan_tags(app_no,'summary', \
-            #     summary_eff, summary_cost, summary_vio_cnt,summary_bus_txt,summary_vio_txt)
-
-            # ap.fill_action_plan_tags(app_no,'summary', \
-            #     summary_eff, summary_cost, summary_vio_cnt,summary_bus_txt,summary_vio_txt)
 
             summary_total_cost = summary_total_cost + summary_cost
-            self._ppt.replace_text(f'{{app{app_no+1}_summary_eff}}',summary_eff)
-            self._ppt.replace_text(f'{{app{app_no+1}_summary_cost}}',summary_cost)
-            self._ppt.replace_text(f'{{app{app_no+1}_summary_vio_cnt}}',summary_vio_cnt)
-            self._ppt.replace_text(f'{{app{app_no+1}_summary_bus_txt}}',summary_bus_txt)
-            self._ppt.replace_text(f'{{app{app_no+1}_summary_vio_txt}}',summary_vio_txt)
+            self._ppt.replace_text(f'{{app{app_no}_summary_eff}}',summary_eff)
+            self._ppt.replace_text(f'{{app{app_no}_summary_cost}}',summary_cost)
+            self._ppt.replace_text(f'{{app{app_no}_summary_vio_cnt}}',summary_vio_cnt)
+            self._ppt.replace_text(f'{{app{app_no}_summary_bus_txt}}',summary_bus_txt)
+            self._ppt.replace_text(f'{{app{app_no}_summary_vio_txt}}',summary_vio_txt)
 
         self._ppt.replace_text('{summary_total_cost}',summary_total_cost)  
         if fix_now_eff > 0:
@@ -576,31 +570,27 @@ class GeneratePPT(Logger):
 
         self._ppt.replace_text('{daily_rate}',ap._day_rate)  
 
-    def fill_critical_rules(self,app_no):
-        app_id = self._app_list[app_no]
+    def fill_critical_rules(self,app_id,app_no):
         rules_df = self._aip_data.critical_rules(app_id)
         if not rules_df.empty:
             critical_rule_df = pd.json_normalize(rules_df['rulePattern'])
             critical_rule_df = critical_rule_df[['name','critical']]
             rule_summary_df=critical_rule_df.groupby(['name']).size().reset_index(name='counts').sort_values(by=['counts'],ascending=False)
-            rule_summary_df=rule_summary_df.head(10)
-            self._ppt.update_table(f'app{app_no+1}_top_violations',rule_summary_df,include_index=False)
+            rule_summary_df=rule_summary_df.head(5)
+            self._ppt.update_table(f'app{app_no}_top_violations',rule_summary_df,include_index=False)
 
-    def fill_violations(self,app_no):
-        app_id = self._app_list[app_no]
+    def fill_violations(self,app_id,app_no):
         violation_df = pd.DataFrame(self._aip_data.violation_sizing(app_id),index=[0])
         violation_df['Violation Count']=pd.Series(["{0:,.0f}".format(val) for val in violation_df['Violation Count']])
         violation_df[' per file']=pd.Series(["{0:,.2f}".format(val) for val in violation_df[' per file']])
         violation_df[' per kLoC']=pd.Series(["{0:,.2f}".format(val) for val in violation_df[' per kLoC']])
         violation_df['Complex objects']=pd.Series(["{0:,.0f}".format(val) for val in violation_df['Complex objects']])
         violation_df[' With violations']=pd.Series(["{0:,.0f}".format(val) for val in violation_df[' With violations']])
-        self._ppt.update_table(f'app{app_no+1}_violation_sizing',violation_df.transpose())
-        self._ppt.replace_text(f'{{app{app_no+1}_critical_violations}}',violation_df['Violation Count'].loc[0])
+        self._ppt.update_table(f'app{app_no}_violation_sizing',violation_df.transpose())
+        self._ppt.replace_text(f'{{app{app_no}_critical_violations}}',violation_df['Violation Count'].loc[0])
 
 
-    def fill_sizing(self,app_no):
-        app_id = self._app_list[app_no]
-
+    def fill_sizing(self,app_id,app_no):
         sizing_df = pd.DataFrame(self._aip_data.tech_sizing(app_id),index=[0])
         sizing_df['LoC']=pd.Series(["{0:,.0f} K".format(val / 1000) for val in sizing_df['LoC']])
         sizing_df['Files']=pd.Series(["{0:,.0f}".format(val) for val in sizing_df['Files']])
@@ -608,7 +598,7 @@ class GeneratePPT(Logger):
         sizing_df['SQL Artifacts']=pd.Series(["{0:,.0f}".format(val) for val in sizing_df['SQL Artifacts']])
         sizing_df['Tables']=pd.Series(["{0:,.0f}".format(val) for val in sizing_df['Tables']])
         sizing_df = sizing_df.transpose()
-        self._ppt.update_table(f'app{app_no+1}_tech_sizing',sizing_df)
+        self._ppt.update_table(f'app{app_no}_tech_sizing',sizing_df)
 
 if __name__ == '__main__':
     print('\nCAST Assessment Deck Generation Tool')
@@ -618,14 +608,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Assessment Deck Generation Tool')
     parser.add_argument('-c','--config', required=True, help='Configuration properties file')
     args = parser.parse_args()
+    ppt = GeneratePPT(Config(args.config))
+    ppt.save_ppt()
 
-    config = Properties()
-    with open(args.config, 'rb') as config_file:
-        config.load(config_file)
+
+    # config = Properties()
+    # with open(args.config, 'rb') as config_file:
+    #     config.load(config_file)
 
     #GeneratePPT(config)
 
-    ppt = GeneratePPT(config)
 
     """
     # Retreive HL data and generated HL specific slides.
@@ -634,7 +626,6 @@ if __name__ == '__main__':
         ppt.get_hl_data()
     """
 
-    ppt.save_ppt()
 
     """
     if generate_AIP:
