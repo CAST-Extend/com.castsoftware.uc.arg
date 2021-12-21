@@ -56,12 +56,13 @@ class AipData(AipRestCall):
 
     _health_grade_ids = ['Efficiency','Robustness','Security','Changeability','Transferability']
 
-    def __init__(self, base_url,user,pswd, app_list, timer_on=False,log_level=INFO):
-        super().__init__(base_url, user, pswd, timer_on,log_level)
+    def __init__(self, config, timer_on=False,log_level=INFO):
+        super().__init__(config.aip_url, config.aip_user, config.aip_password, timer_on,log_level)
 
         #self._rest=rest
-        self._base=app_list
-        for s in app_list:
+        #self._base=app_list
+
+        for s in config.aip_list:
             self.info(f'Collecting AIP data for {s}')
             self.__data[s]={}
             self.__data[s]['has data'] = False
@@ -104,7 +105,7 @@ class AipData(AipRestCall):
         iso={1061004:"Security",
              1061003:"Reliabllity",
              1061002:"Performance-Efficiency",
-             1061001:"Maintainablity",
+             1061001:"Maintainability",
         }
 
         rslt_df = DataFrame()
@@ -123,7 +124,7 @@ class AipData(AipRestCall):
 
                 rslt_df = concat([rslt_df,total,temp])
             except KeyError as e:
-                warning(f'no iso rules for {value} ({e})')
+                self.warning(f'no iso rules for {value} ({e})')
 
         rslt_df['category'] = rslt_df['category'].mask(rslt_df['category'].ne(rslt_df['category'].shift()).cumsum().duplicated(), '')
 
@@ -352,16 +353,15 @@ class AipData(AipRestCall):
 class HLData(HLRestCall):
     __data={}
 
-    def __init__(self, hl_base_url, hl_user, hl_pswd, hl_instance, app_list, app_translate_list, timer_on=False):
-        super().__init__(hl_base_url, hl_user, hl_pswd, hl_instance, timer_on)
+    def __init__(self, config, timer_on=False):
+        super().__init__(config.hl_url, config.hl_user, config.hl_password, config.hl_instance, timer_on)
 
-        for s in app_list:
-            hl_app_name=app_translate_list[s]
-            self.info(f'Collecting Highlight data for {s}({hl_app_name})')
+        for s in config.hl_list:
+            self.info(f'Collecting Highlight data for {s}')
             self.__data[s]={}
             self.__data[s]['has data'] = False
 
-            app_id = self.get_app_id(hl_app_name)
+            app_id = self.get_app_id(s)
             if app_id:
                 self.__data[s]['cloud']=DataFrame(self.get_cloud_data(app_id))
                 (lic,cves,total_components) = self.get_third_party(app_id)
@@ -393,7 +393,7 @@ class HLData(HLRestCall):
 
                 self.__data[s]['total_components']=total_components
             else:
-                self.error(f'Highlight Application Id not found for {hl_app_name}')    
+                self.error(f'Highlight Application Id not found for {s}')    
         #    self._base = schema
             self._data_retrieved = False
             self._app_id = None

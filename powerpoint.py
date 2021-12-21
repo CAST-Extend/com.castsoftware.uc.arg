@@ -40,7 +40,7 @@ class PowerPoint (Logger):
 
     def replace_risk_factor(self, grades, app_no=0, search_str=None):
         if search_str == None:
-            search_str=f'{{app{app_no+1}_risk_'
+            search_str=f'{{app{app_no}_risk_'
         
         for slide in self._prs.slides:
             for shape in slide.shapes:
