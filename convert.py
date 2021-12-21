@@ -429,9 +429,6 @@ class GeneratePPT(Logger):
                     iso_df.loc[iso_df['violation']!='','background']='255,255,255'
                     self._ppt.update_table(f'app{app_no}_iso5055',iso_df,
                                            include_index=False,background='background')
-
-
-
             #replaceHighlight application specific data
             if config.hl_active and self._hl_data.has_data(hl_id):
                 lic_df=self._hl_data.get_lic_info(hl_id)
@@ -547,6 +544,7 @@ class GeneratePPT(Logger):
             self._ppt.replace_text(f'{{app{app_no}_nt_tot_cost}}',near_term_cost)
             self._ppt.replace_text(f'{{app{app_no}_nt_tot_eff}}',near_term_eff)
 
+
             summary_total_cost = summary_total_cost + summary_cost
             self._ppt.replace_text(f'{{app{app_no}_summary_eff}}',summary_eff)
             self._ppt.replace_text(f'{{app{app_no}_summary_cost}}',summary_cost)
@@ -603,11 +601,11 @@ class GeneratePPT(Logger):
         self._ppt.update_table(f'app{app_no}_tech_sizing',sizing_df)
 
 if __name__ == '__main__':
-    print('\nCAST Assessment Report Generation (ARG)')
+    print('\nCAST Assessment Deck Generation Tool')
     print('Copyright (c) 2021 CAST Software Inc.\n')
-    print('If you need assistance, please contact Nevin Kaplan (NKA) from the CAST US PS team\n')
+    print('If you need assistance, please contact Nevin Kaplan (NKA) or Guru Pai (GPR) from the CAST US PS team\n')
 
-    parser = argparse.ArgumentParser(description='CAST Assessment Report Generation (ARG)')
+    parser = argparse.ArgumentParser(description='Assessment Deck Generation Tool')
     parser.add_argument('-c','--config', required=True, help='Configuration properties file')
     args = parser.parse_args()
     ppt = GeneratePPT(Config(args.config))
