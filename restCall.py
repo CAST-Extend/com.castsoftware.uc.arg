@@ -4,12 +4,14 @@ from pandas import DataFrame
 from pandas import json_normalize
 from pandas import concat
 from pandas import notnull
+from pptx.chart.data import Category
+from IPython.display import display
 
 from requests.auth import HTTPBasicAuth 
 from time import perf_counter, ctime
 from copy import copy
 from logger import Logger
-from logging import DEBUG, INFO, ERROR
+from logging import DEBUG, INFO, ERROR, warning
 
 from restAPI import RestCall
 from aipRestCall import AipRestCall
@@ -25,7 +27,7 @@ import json
     This class is used to retrieve information from the CAST AIP REST API
 """
 class AipData(AipRestCall):
-    _data={}
+    __data={}
     _base=[]
 
     _sizing = {
@@ -54,45 +56,79 @@ class AipData(AipRestCall):
 
     _health_grade_ids = ['Efficiency','Robustness','Security','Changeability','Transferability']
 
-    def __init__(self, base_url,user,pswd, app_list, timer_on=False,log_level=INFO):
-        super().__init__(base_url, user, pswd, timer_on,log_level)
+    def __init__(self, config, timer_on=False,log_level=INFO):
+        super().__init__(config.aip_url, config.aip_user, config.aip_password, timer_on,log_level)
 
         #self._rest=rest
-        self._base=app_list
-        for s in app_list:
+        #self._base=app_list
+
+        for s in config.aip_list:
             self.info(f'Collecting AIP data for {s}')
-            self._data[s]={}
-            self._data[s]['has data'] = False
+            self.__data[s]={}
+            self.__data[s]['has data'] = False
             central_schema = f'{s}_central'
             domain_id = self.get_domain(central_schema)
             if domain_id == -1:
                 raise SystemExit  #connection failed, exit here
             if domain_id is not None:
-                self._data[s]['domain_id']=domain_id
+                self.__data[s]['domain_id']=domain_id
                 snapshot = self.get_latest_snapshot(domain_id)
-                self._data[s]['snapshot']=snapshot
-                if self._data[s]['snapshot']:
-                    self._data[s]['has data'] = True
-                    self._data[s]['tqi_compliance']=self.aggregate_violation_ratio(domain_id,snapshot['id'],'60017',self._imp_list)
-                    self._data[s]['doc_compliance']=self.aggregate_violation_ratio(domain_id,snapshot['id'],'66033',self._doc_list,False)
-                    self._data[s]['grades']=self.get_grades_by_technology(domain_id,self._data[s]['snapshot'])
-                    self._data[s]['sizing']=self.get_sizing_by_technology(domain_id,self._data[s]['snapshot'],self._sizing)
-                    self._data[s]['loc_sizing']=self.get_sizing(domain_id,self._sizing) 
-                    self._data[s]['tech_sizing']=self.get_sizing(domain_id,self._tech_sizing) 
-                    self._data[s]['violation_sizing']=self.get_violation_CR(domain_id)
-                    self._data[s]['critical_rules']=self.get_rules(domain_id,self._data[s]['snapshot']['id'],60017,non_critical=False)
+                self.__data[s]['snapshot']=snapshot
+                if self.__data[s]['snapshot']:
+                    self.__data[s]['has data'] = True
+                    self.__data[s]['tqi_compliance']=self.aggregate_violation_ratio(domain_id,snapshot['id'],'60017',self._imp_list)
+                    self.__data[s]['doc_compliance']=self.aggregate_violation_ratio(domain_id,snapshot['id'],'66033',self._doc_list,False)
+                    self.__data[s]['grades']=self.get_grades_by_technology(domain_id,self.__data[s]['snapshot'])
+                    self.__data[s]['sizing']=self.get_sizing_by_technology(domain_id,self.__data[s]['snapshot'],self._sizing)
+                    self.__data[s]['loc_sizing']=self.get_sizing(domain_id,self._sizing) 
+                    self.__data[s]['tech_sizing']=self.get_sizing(domain_id,self._tech_sizing) 
+                    self.__data[s]['violation_sizing']=self.get_violation_CR(domain_id)
+                    self.__data[s]['critical_rules']=self.get_rules(domain_id,self.__data[s]['snapshot']['id'],60017,non_critical=False)
+                    self.__data[s]['ISO']=self.__get_iso_rules(domain_id,snapshot['id'])
 
-                    (ap_df,ap_summary_df) = self.get_action_plan(domain_id,self._data[s]['snapshot']['id']) 
-                    self._data[s]['action_plan']=ap_df
-                    self._data[s]['action_plan_summary']=ap_summary_df
+                    (ap_df,ap_summary_df) = self.get_action_plan(domain_id,self.__data[s]['snapshot']['id']) 
+                    self.__data[s]['action_plan']=ap_df
+                    self.__data[s]['action_plan_summary']=ap_summary_df
             else:
                 self.logger.warn(f'Domain not found for {s}')
 
     def has_data(self, app):
-        return self._data[app]['has data']
+        return self.__data[app]['has data']
 
     def data(self,app):
-        return self._data[app]
+        return self.__data[app]
+
+    def iso_rules(self, app):
+        return self.__data[app]['ISO']
+
+    def __get_iso_rules(self,domain_id,snapshot_id):
+        iso={1061004:"Security",
+             1061003:"Reliabllity",
+             1061002:"Performance-Efficiency",
+             1061001:"Maintainability",
+        }
+
+        rslt_df = DataFrame()
+        rslt_df.style.set_properties(subset=['text'],**{'text-align': 'left'})
+        for key, value in iso.items():
+            try:
+                temp = DataFrame(columns=['category','violation'])
+                rp = json_normalize(self.get_rules(domain_id,snapshot_id,key)['rulePattern'])
+                temp['violation'] = rp['name']
+                temp['category'] = value
+                temp = temp.groupby(['category','violation']).size().reset_index(name='count') 
+
+                total = temp.groupby(['category'])['count'].sum().reset_index(name='count') 
+                total['violation']=''
+                total = total[['category','violation','count']]
+
+                rslt_df = concat([rslt_df,total,temp])
+            except KeyError as e:
+                self.warning(f'no iso rules for {value} ({e})')
+
+        rslt_df['category'] = rslt_df['category'].mask(rslt_df['category'].ne(rslt_df['category'].shift()).cumsum().duplicated(), '')
+
+        return rslt_df
 
     def domain(self, app):
         return self.data(app)['domain_id']
@@ -208,7 +244,7 @@ class AipData(AipRestCall):
 
     def calc_grades_all_apps(self):
         all_app=DataFrame()
-        for row in self._data:
+        for row in self.__data:
             if self.has_data(row):
                 app_name=self.snapshot(row)['name']
                 grades=self.grades(row)
@@ -243,7 +279,7 @@ class AipData(AipRestCall):
     def get_all_app_text(self):
         rslt = ""
 
-        data = self._data
+        data = self.__data
         l = len(self._base)
         if l == 1:
             return self.snapshot(self._base[0])['name']
@@ -317,16 +353,15 @@ class AipData(AipRestCall):
 class HLData(HLRestCall):
     __data={}
 
-    def __init__(self, hl_base_url, hl_user, hl_pswd, hl_instance, app_list, app_translate_list, timer_on=False):
-        super().__init__(hl_base_url, hl_user, hl_pswd, hl_instance, timer_on)
+    def __init__(self, config, timer_on=False):
+        super().__init__(config.hl_url, config.hl_user, config.hl_password, config.hl_instance, timer_on)
 
-        for s in app_list:
-            hl_app_name=app_translate_list[s]
-            self.info(f'Collecting Highlight data for {s}({hl_app_name})')
+        for s in config.hl_list:
+            self.info(f'Collecting Highlight data for {s}')
             self.__data[s]={}
             self.__data[s]['has data'] = False
 
-            app_id = self.get_app_id(hl_app_name)
+            app_id = self.get_app_id(s)
             if app_id:
                 (lic,cves,total_components) = self.get_third_party(app_id)
                 
@@ -358,7 +393,7 @@ class HLData(HLRestCall):
 
                 self.__data[s]['total_components']=total_components
             else:
-                self.error(f'Highlight Application Id not found for {hl_app_name}')    
+                self.error(f'Highlight Application Id not found for {s}')    
         #    self._base = schema
             self._data_retrieved = False
             self._app_id = None

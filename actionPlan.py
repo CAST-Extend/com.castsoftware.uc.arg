@@ -67,8 +67,7 @@ class ActionPlan:
         self._aip_data=aip_data
         self._effort_df = pd.read_csv('./Effort.csv')
 
-    def fill_action_plan(self,app_no):
-        app_id = self._app_list[app_no]
+    def fill_action_plan(self,app_id,app_no):
 
         (ap_df,ap_summary_df)=self._aip_data.action_plan(app_id)
         if not ap_summary_df.empty:
@@ -112,25 +111,25 @@ class ActionPlan:
 #            ap_table = ap_table.drop(columns=['comment','tag','Technical Criteria','Days Effort','Cost Est.','Eff Hours'],index=0)
             ap_table = ap_table.drop(columns=['comment','tag','Technical Criteria','Days Effort','Cost Est.','Eff Hours'])
 
-            self._ppt.update_table(f'app{app_no+1}_action_plan',ap_table.head(29),include_index=False,background='RGB')
+            self._ppt.update_table(f'app{app_no}_action_plan',ap_table.head(29),include_index=False,background='RGB')
 
             sum = ap_summary_df['No. of Actions'].sum()
-            self._ppt.replace_text(f"{{app{app_no+1}_total_violations}}",str(sum))
+            self._ppt.replace_text(f"{{app{app_no}_total_violations}}",str(sum))
 
-            violation_table = self._ppt.get_shape_by_name(f'app{app_no+1}_action_plan') 
+            violation_table = self._ppt.get_shape_by_name(f'app{app_no}_action_plan') 
             if violation_table:
                 page_no = self._ppt.get_page_no(violation_table)
-                self._ppt.replace_text(f"{{app{app_no+1}_violation_page}}",str(page_no))
+                self._ppt.replace_text(f"{{app{app_no}_violation_page}}",str(page_no))
 
-            violation_table = self._ppt.get_shape_by_name(f'app{app_no+1}_table_type_name') 
+            violation_table = self._ppt.get_shape_by_name(f'app{app_no}_table_type_name') 
             if violation_table:
                 page_no = self._ppt.get_page_no(violation_table)
-                self._ppt.replace_text(f"{{app{app_no+1}_HL_violation_page}}",str(page_no))
+                self._ppt.replace_text(f"{{app{app_no}_HL_violation_page}}",str(page_no))
         else:
-            self._ppt.replace_text(f"{{app{app_no+1}_extreme_violation_total}}",'TBD') 
-            self._ppt.replace_text(f"{{app{app_no+1}_high_violation_total}}",'TBD') 
-            self._ppt.replace_text(f"{{app{app_no+1}_moderate_violation_total}}",'TBD') 
-            self._ppt.replace_text(f"{{app{app_no+1}_low_violation_total}}",'TBD') 
+            self._ppt.replace_text(f"{{app{app_no}_extreme_violation_total}}",'TBD') 
+            self._ppt.replace_text(f"{{app{app_no}_high_violation_total}}",'TBD') 
+            self._ppt.replace_text(f"{{app{app_no}_moderate_violation_total}}",'TBD') 
+            self._ppt.replace_text(f"{{app{app_no}_low_violation_total}}",'TBD') 
 
     def calc_action_plan_effort(self,ap_summary_df,app_no,priority,default=''):
         (priority_text, vio_cnt, data) = self.common_business_criteria(ap_summary_df,priority,default)
@@ -139,12 +138,12 @@ class ActionPlan:
         return effort, cost, vio_cnt, data
 
     # def fill_action_plan_tags(self,app_no,type,effort,cost,vio_cnt,bus_txt,vio_txt):
-    #     self._ppt.replace_text(f'{{app{app_no+1}_{type}_eff}}',effort)
-    #     self._ppt.replace_text(f'{{app{app_no+1}_{type}_cost}}',cost)
-    #     self._ppt.replace_text(f'{{app{app_no+1}_{type}_vio_cnt}}',vio_cnt)
+    #     self._ppt.replace_text(f'{{app{app_no}_{type}_eff}}',effort)
+    #     self._ppt.replace_text(f'{{app{app_no}_{type}_cost}}',cost)
+    #     self._ppt.replace_text(f'{{app{app_no}_{type}_vio_cnt}}',vio_cnt)
 
-    #     self._ppt.replace_text(f'{{app{app_no+1}_{type}_bus_txt}}',bus_txt,tbd_for_blanks=False)
-    #     self._ppt.replace_text(f'{{app{app_no+1}_{type}_vio_txt}}',vio_txt)
+    #     self._ppt.replace_text(f'{{app{app_no}_{type}_bus_txt}}',bus_txt,tbd_for_blanks=False)
+    #     self._ppt.replace_text(f'{{app{app_no}_{type}_vio_txt}}',vio_txt)
 
     def common_business_criteria(self,summary_df,priority,default=''):
         filtered=summary_df[summary_df['tag']==priority]

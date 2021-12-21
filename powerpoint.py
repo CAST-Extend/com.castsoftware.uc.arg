@@ -7,6 +7,9 @@ from pptx.parts.embeddedpackage import EmbeddedXlsxPart
 from pptx.dml.color import ColorFormat, RGBColor
 from pptx.enum.dml import MSO_THEME_COLOR
 
+from logger import Logger
+from logging import INFO, error
+
 import util
 
 from copy import deepcopy
@@ -15,26 +18,29 @@ import pandas as pd
 import logging
 
 
-class PowerPoint:
+
+class PowerPoint (Logger):
     _input = None
     _output = None
     _prs = None
 
-    def __init__(self,input, output):
-       self._input=input 
-       self._output=output
+    def __init__(self,input, output,log_level=INFO):
+        super().__init__("RestCall",log_level)
 
-       self._prs = Presentation(self._input)
+        self._input=input 
+        self._output=output
 
-       self._logger = logging.getLogger(__name__)
-       shandler = logging.StreamHandler()
-       formatter = logging.Formatter('%(asctime)s - %(filename)s [%(funcName)30s:%(lineno)-4d] %(levelname)-8s - %(message)s')
-       shandler.setFormatter(formatter)
-       self._logger.addHandler(shandler)
+        self._prs = Presentation(self._input)
+
+        # self._logger = logging.getLogger(__name__)
+        # shandler = logging.StreamHandler()
+        # formatter = logging.Formatter('%(asctime)s - %(filename)s [%(funcName)30s:%(lineno)-4d] %(levelname)-8s - %(message)s')
+        # shandler.setFormatter(formatter)
+        # self.addHandler(shandler)
 
     def replace_risk_factor(self, grades, app_no=0, search_str=None):
         if search_str == None:
-            search_str=f'{{app{app_no+1}_risk_'
+            search_str=f'{{app{app_no}_risk_'
         
         for slide in self._prs.slides:
             for shape in slide.shapes:
@@ -71,7 +77,7 @@ class PowerPoint:
                                         cur_text = cur_text.replace(f'{search_str}{g}}}',risk)
                                         run.text = cur_text
                                     except KeyError:
-                                        self._logger.debug(f'invalid key: {g}')
+                                        self.debug(f'invalid key: {g}')
                                         break;
 
     def replace_grade(self, grades,app_no=0, search_str=None):
@@ -127,8 +133,10 @@ class PowerPoint:
                 chart_data.categories = ['grade']
                 chart_data.add_series('Series 1', data)
                 shape.chart.replace_data(chart_data)
-        except AttributeError:
-            self._logger.debug(f'Invalid template configuration: {name}')
+        except AttributeError as ae:
+            self.debug(f'Attribute Error, invalid template configuration: {name} ({ae})')
+        except KeyError as ke:
+            self.debug(f'Key Error, invalid template configuration: {name} ({ke})')
 
     def get_grade_color(self,grade):
         rgb = 0
@@ -141,7 +149,7 @@ class PowerPoint:
         return rgb
 
 
-    def replace_text (self, search_str, repl_str, tbd_for_blanks=True):
+    def replace_text (self, search_str, repl_str, tbd_for_blanks=True,slide=None):
         if tbd_for_blanks:
             skip = False
             omit_list = ["immediate_action","other","risk_detail"]
@@ -155,14 +163,18 @@ class PowerPoint:
             if not skip and len(str(repl_str)) == 0:
                 repl_str = 'TBD'
 
-        for slide in self._prs.slides:
+        if slide is None:
+            for s in self._prs.slides:
+                self.replace_slide_text(s, search_str, repl_str)
+        else:
             self.replace_slide_text(slide, search_str, repl_str)
 
     def replace_slide_text (self, slide, search_str, repl_str):
         for shape in slide.shapes:
             if shape.has_text_frame:
                 for paragraph in shape.text_frame.paragraphs:
-                    self.replace_paragraph_text(paragraph,search_str,repl_str)
+                    if search_str in paragraph.text:
+                        self.replace_paragraph_text(paragraph,search_str,repl_str)
             elif shape.has_table:
                 tbl=shape.table
                 row_count = len(tbl.rows)
@@ -174,7 +186,10 @@ class PowerPoint:
                             self.replace_paragraph_text(paragraph,search_str,repl_str)
 
     def replace_paragraph_text (self, paragraph, search_str, repl_str):
-        if paragraph.text.find(search_str)!=-1:
+        """
+            search all the runs in a paragraph and replace the search_str with repl_str
+        """
+        if search_str in paragraph.text:
             t_parags = len(paragraph.runs)
             for run_idx in range(t_parags):
                 run = paragraph.runs[run_idx]
@@ -197,31 +212,22 @@ class PowerPoint:
                                self.delete_run(paragraph.runs[i]) 
                             self.replace_paragraph_text(paragraph, search_str, repl_str)
                             break
-
-
-                
-    
-    # original - kinda working
-    # def replace_paragraph_text (self, paragraph, search_str, repl_str):
-    #     if paragraph.text.find(search_str)!=-1:
-    #         cur_text=''
-    #         first=True
-    #         for run in paragraph.runs:
-    #             cur_text = cur_text + run.text
-    #             if first != True:
-    #                 self.delete_run(run)
-    #             first=False
-    #         run = paragraph.runs[0]
-    #         run.text = cur_text.replace(str(search_str), str(repl_str))
+                        
 
     def replace_shape_name (self, slide, search_str, repl_str):
         for shape in slide.shapes:
             if shape.name.find(search_str) != -1: 
                 shape.name = shape.name.replace(search_str,repl_str)
 
-    def get_shape_by_name(self, name, use_slide=None):
-        rslt = None
+    def get_slide_by_shape(self,shape):
+        slide = shape
+        while True:
+            if type(slide).__name__ == 'Slide':
+                break
+            slide = slide._parent
+        return slide
 
+    def get_shape_by_name(self, name, use_slide=None):
         slides = self._prs.slides
         if use_slide != None:
             slides = [use_slide] 
@@ -229,8 +235,16 @@ class PowerPoint:
         for slide in slides:
             for shape in slide.shapes:
                 if shape.name == name:
-                    rslt = shape
-        return rslt
+                    return shape
+        return None
+
+    def rename_shape(self, slide, old_name, new_name):
+        for shape in slide.shapes:
+            if shape.name == old_name:
+                shape.name = new_name
+                return True
+                break
+        return False
 
     def merge_runs(self, paragraph):
         cur_text=''
@@ -274,7 +288,7 @@ class PowerPoint:
                     cell.fill.solid()
                     cell.fill.fore_color.rgb = RGBColor(int(rgb[0]), int(rgb [1]), int(rgb[2]))
                 except IndexError:
-                    self._logger.warn('index error in update_table while setting background color')
+                    self.warning('index error in update_table while setting background color')
     
     def set_table_font_color(self,table,colors,rows,cols,has_header):
         for row in range(rows):
@@ -290,7 +304,7 @@ class PowerPoint:
                     run = self.merge_runs(paragraph)
                     run.font.color.rgb=RGBColor(int(rgb[0]), int(rgb [1]), int(rgb[2]))
                 except IndexError:
-                    self._logger.warn('index error in update_table while setting background color')
+                    self.warning('index error in update_table while setting background color')
 
     def update_table(self, name, df, include_index=True, background=None, forground=None, has_header=True):
         table_shape = self.get_shape_by_name(name)
@@ -298,7 +312,7 @@ class PowerPoint:
             table=table_shape.table
 
             colnames = list(df.columns)
-            self._logger.info(f'filling table {name} with {len(df.index)} rows of data')
+            self.debug(f'filling table {name} with {len(df.index)} rows of data')
 
             # Insert the row zero names
             if include_index:
@@ -312,7 +326,7 @@ class PowerPoint:
                         run = self.merge_runs(cell.text_frame.paragraphs[0])
                         run.text = text
                     except IndexError:
-                        self._logger.warn(f'index error in update_table ({name}) while setting df index')
+                        self.warning(f'index error in update_table ({name}) while setting df index')
             rows, cols = df.shape
             if background:
                 cols = cols-1
@@ -325,7 +339,7 @@ class PowerPoint:
                 try:
                     self.set_table_font_color(table,df[forground],rows,cols,has_header)
                 except (KeyError):
-                    self._logger.warn(f'error setting forground for {name}')
+                    self.warning(f'error setting forground for {name}')
 
             m = df.values
             for row in range(rows):
@@ -347,7 +361,7 @@ class PowerPoint:
                         run = self.merge_runs(cell.text_frame.paragraphs[0])
                         run.text = text
                     except IndexError:
-                        self._logger.warn(f'index error in update_table ({name}) while setting values')
+                        self.warning(f'index error in update_table ({name}) while setting values')
 
     def replace_block(self, begin_tag, end_tag, repl_text):
         for slide in self._prs.slides:
@@ -363,14 +377,71 @@ class PowerPoint:
                             new_text = text_prefix + repl_text + text_suffix
                             run.text = run.text.replace(run_text,new_text)
 
-    def copy_block(self, tag, prefix, count):
+    def find_group(self, slide=None):
+        block = []
+
+        slides = []
+        if slide is not None:
+            slides = [slide] 
+        else:
+            slides = self._prs.slides
+
+        on_slide = None
+        on_paragraph = None
+        paragraph_start = None
+
+        grps=[]
+        for slide in slides:
+            for shape in slide.shapes:
+                if shape.has_text_frame:
+                    for pno,paragraph in enumerate(shape.text_frame.paragraphs):
+                        if '{group:' in paragraph.text:
+                            if '{/group' in paragraph.text:
+                                grp={}
+
+                                (grp_nm, istart, iend, ostart,oend) = util.get_between(paragraph.text,"{group:","}")
+                                # mark the beginning of the block
+                                grp['name']=grp_nm
+                                grp['shape']=shape
+                                grp['paragraph']=pno
+                                grp['text outer start']=ostart
+                                grp['text inner start']=istart
+                               
+                                (grp_bdy, istart, iend, ostart,oend) = util.get_between(paragraph.text,"}",f"{{/group:{grp_nm}}}")
+                                grp['body']=grp_bdy
+                                grp['text outer end']=oend
+                                grp['text inner end']=iend
+
+                                grps.append(grp)
+
+        return grps
+
+
+                                    
+
+
+
+
+
+
+
+        return block
+
+    def copy_block(self, tag, prefix, count,slide=None):
         search_start = f'{{{tag}}}'
         search_end = f'{{end_{tag}}}'
 
         block = []
 
+        slides = []
+        if slide is not None:
+            slides = [slide] 
+        else:
+            slides = self._prs.slides
+
+
         found=False
-        for slide in self._prs.slides:
+        for slide in slides:
             for shape in slide.shapes:
                 if shape.has_text_frame:
                     for paragraph in shape.text_frame.paragraphs:
@@ -453,6 +524,8 @@ class PowerPoint:
             size_catagory = 'large'
         self.replace_text(f'{{app{app_no}_loc_category}}',size_catagory)
 
+    
+ 
     def duplicate_slides(self, app_cnt):
         for cnt in range(2,app_cnt+1):
             for idx, slide in enumerate(self._prs.slides):
@@ -473,8 +546,15 @@ class PowerPoint:
                             self.replace_slide_text(slide,"{app_per_page}","")
 
     
-    def copy_slide(self,index):
-        source = self._prs.slides[index]
+    def copy_slide(self,index=-1,template=None):
+        if index<0 and template is None:
+            raise KeyError('invalid parameters: either index or template are required')
+
+        if template is not None:
+            source = template
+        else:
+            source = self._prs.slides[index]
+
         blank_slide_layout = source.slide_layout
         dest = self._prs.slides.add_slide(blank_slide_layout)
 
@@ -484,24 +564,26 @@ class PowerPoint:
             dest.shapes._spTree.insert_element_before(newel, 'p:extLst')
 
         for key, value in source.part.rels.items():
-            # Make sure we don't copy a notesSlide relation as that won't exist
-            if "notesSlide" not in value.reltype:
-                target = value._target
-                # if the relationship was a chart, we need to duplicate the embedded chart part and xlsx
-                if "chart" in value.reltype:
-                    partname = target.package.next_partname(
-                        ChartPart.partname_template)
-                    xlsx_blob = target.chart_workbook.xlsx_part.blob
-                    target = ChartPart(partname, target.content_type,
-                                    deepcopy(target._element), package=target.package)
+            try:
+                # Make sure we don't copy a notesSlide relation as that won't exist
+                if "notesSlide" not in value.reltype:
+                    target = value._target
+                    # if the relationship was a chart, we need to duplicate the embedded chart part and xlsx
+                    if "chart" in value.reltype:
+                        partname = target.package.next_partname(
+                            ChartPart.partname_template)
+                        xlsx_blob = target.chart_workbook.xlsx_part.blob
+                        target = ChartPart(partname, target.content_type,
+                                        deepcopy(target._element), package=target.package)
 
-                    target.chart_workbook.xlsx_part = EmbeddedXlsxPart.new(
-                        xlsx_blob, target.package)
+                        target.chart_workbook.xlsx_part = EmbeddedXlsxPart.new(
+                            xlsx_blob, target.package)
 
-                dest.part.rels.add_relationship(value.reltype,
-                                                target,
-                                                value.rId)
-
+                    dest.part.rels.add_relationship(value.reltype,
+                                                    target,
+                                                    value.rId)
+            except AttributeError as err:
+                self.logger.error(f'Attribute Error {err} while copying slide {index} part {key}')
         return dest
 
     def remove_empty_placeholders(self):
@@ -510,12 +592,6 @@ class PowerPoint:
                 if placeholder.has_text_frame and placeholder.text_frame.text == "":
                     sp = placeholder._sp
                     sp.getparent().remove(sp)
-
-    def get_shape_parent(self,shape):
-        rslt = None
-        if hasattr(shape,'_parent'):
-            rslt = shape._parent
-        return rslt
 
     def delete_paragraph(self,paragraph):
         p = paragraph._p
@@ -543,22 +619,30 @@ class PowerPoint:
         slides = list(xml_slides)
         xml_slides.remove(slides[index])  
 
+    def get_shape_parent(self,shape):
+        rslt = None
+        if hasattr(shape,'_parent'):
+            rslt = shape._parent
+        return rslt
+
+    def copy_paragraph(self,src,dst):
+        dst.alignment = src.alignment
+        dst.level = src.level
+        dst.line_spacing = src.line_spacing
+        dst.space_after = src.space_after
+        dst.space_before = src.space_before
+
+        for r in src.runs:    
+            run = dst.add_run()
+            run.text = deepcopy(r.text)
+            font = run.font
+            font.name = r.font.name
+            font.size = r.font.size
+            font.bold = r.font.bold
+            font.italic = r.font.italic
+            if hasattr(r.font.color, 'rgb'):
+                font.color.rgb = r.font.color.rgb
+
     def save(self):
         self._prs.save(self._output)
 
-"""
-from restCall import AipRestCall
-from restCall import AipData
-
-aip_rest = AipRestCall("http://sha-dd-console:8080/CAST-RESTAPI-integrated/rest/","cast","cast",True)
-project = "Blackhawks"    
-apps = ["mobile_doorman_android","mobile_doorman_ios"] 
-app_cnt = len(apps)
-aip_data = AipData(aip_rest,project, apps)
-grade_all = aip_data.get_app_grades(app_id)
-
-app_no=0
-ppt.replace_grade(grade_all,app_no+1)
-
-ppt.save()
-"""
