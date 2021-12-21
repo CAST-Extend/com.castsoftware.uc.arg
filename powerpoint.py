@@ -646,19 +646,3 @@ class PowerPoint (Logger):
     def save(self):
         self._prs.save(self._output)
 
-"""
-from restCall import AipRestCall
-from restCall import AipData
-
-aip_rest = AipRestCall("http://sha-dd-console:8080/CAST-RESTAPI-integrated/rest/","cast","cast",True)
-project = "Blackhawks"    
-apps = ["mobile_doorman_android","mobile_doorman_ios"] 
-app_cnt = len(apps)
-aip_data = AipData(aip_rest,project, apps)
-grade_all = aip_data.get_app_grades(app_id)
-
-app_no=0
-ppt.replace_grade(grade_all,app_no+1)
-
-ppt.save()
-"""
