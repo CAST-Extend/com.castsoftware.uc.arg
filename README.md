@@ -19,7 +19,7 @@ The script is designed to run on the command line using one parameter, --config,
 
     py convert.py --config config.properties 
 
-## Configuration file
+# Configuration file
 The Assessment Deck Generation Tool is configured using a json formatted file.  The file is divided into three sections, general configuration, application list and rest configuration.  
 #### General Configuration
 The general configuration section contains four parts,  
@@ -37,13 +37,13 @@ This section contains a list of all applications that will be used in the report
 aip is the only required in this section.  If Highlight or title are empty or left out the aip value will be used.
 
 ####REST Configuration
-The REST configuration is divided into two parts, AIP and Highlight.  Both of these configurations contain 
+The REST configuration is divided into two parts, AIP and Highlight.  Both configurations contain 
 * Active - toggle to turn REST service on/off
 * URL - the service base URL 
 * user - login user id
 * password - login password (non-encrypted)
 
-The Highlight configuaration contains an additional field, instance, which refers to the login instance id.
+The Highlight configuration contains an additional field, instance, which refers to the login instance id.
 
 ####Sample configuration
 
