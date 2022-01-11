@@ -79,67 +79,6 @@ class GeneratePPT(Logger):
     def save_ppt(self):
         self._ppt.save()
 
-    # def read_config(self, config):
-    #     """
-    #     Read entries from the config file and save the values in class/instance vars.
-    #     """
-
-    #     # TODO: handle undefined entries
-    #     self._project_name = config.get('project').data
-    #     self._template = config.get('template').data
-    #     self._app_list = config.get('appl.list').data.strip().split(',')
-    #     self._appl_title = json.loads(config.get('appl.title').data)
-    #     self._hl_app_list = json.loads(config.get('appl.highlight').data)
-
-    #     #set default values
-    #     for appl in self._app_list:
-    #         #test the application title list, if not found set it to the list value 
-    #         try:
-    #             test = self._appl_title[appl]
-    #         except (KeyError):
-    #             self._appl_title[appl]=appl
-    #         try:
-    #             test = self._hl_app_list[appl]
-    #         except (KeyError):
-    #             self._hl_app_list[appl]=appl
-
-    #         #test the application highlight list, if not found set it to the list value 
-    #         try:
-    #             test = self._hl_app_list[appl]
-    #         except (KeyError):
-    #             self._hl_app_list[appl]=appl
-    #         try:
-    #             test = self._hl_app_list[appl]
-    #         except (KeyError):
-    #             self._hl_app_list[appl]=appl
-
-
-    #     self._output_folder = config.get('output.folder').data
-
-    #     self._generate_AIP = config.get('output.aip').data
-    #     self._generate_HL = config.get('output.hl').data
-    #     #self._generate_procs = config.get('output.procs').data
-    #     self._generate_procs=False
-        
-    #     if self._generate_HL.lower() == 'yes':
-    #         self._generate_HL = True
-    #         self._hl_base_url = config.get('hl.base_url').data
-    #         self._hl_user = config.get('hl.user').data
-    #         self._hl_pswd = config.get('hl.pswd').data
-    #         self._hl_instance = config.get('hl.instance').data
-    #         # self._hl_app_list={}
-    #         # self._hl_app_list = json.loads(config.get('hl.application.list').data)
-    #     else:     
-    #         self._generate_HL = False
-
-    #     if self._generate_AIP.lower() == 'yes':
-    #         self._generate_AIP = True
-    #         self._aip_base_url = config.get('aip.base_url').data
-    #         self._aip_user = config.get('aip.user').data
-    #         self._aip_pswd = config.get('aip.pswd').data
-    #     else:     
-    #         self._generate_AIP = False
-
     def replace_all_text(self,config):
         app_cnt = len(config.application)
         self._ppt.replace_text("{project}", config.project)
@@ -264,7 +203,7 @@ class GeneratePPT(Logger):
                         The necessary data is found in the loc_tbl
                     """
                     imp_df = self._aip_data.tqi_compliance(app_id)
-                    imp_df.drop(columns=['Key','Total','Weight','Compliance'],inplace=True)
+                    imp_df.drop(columns=['Weight','Total','Succeeded','Compliance'],inplace=True)
                     imp_df.sort_values(by=['Score','Rule'], inplace=True, ascending = False)
 
                     file_name = f'{config.output}/health-{title_list[idx]}.xlsx'
@@ -277,6 +216,13 @@ class GeneratePPT(Logger):
                     imp_df['RGB'] = np.where(imp_df.Score >= 3,'194,236,213',\
                         np.where(imp_df.Score < 2,'255,210,210','255,240,194'))
                     imp_df.Score = imp_df.Score.map('{:.2f}'.format)
+
+                    imp_df['Cause']=''
+                    with open('tech.json') as json_file:
+                        tech_data = json.load(json_file)
+                    imp_df['Cause']=imp_df['Key'].map(tech_data)
+
+                    imp_df = imp_df[['Rule','Score','Cause','Failed','RGB']]
                     self._ppt.update_table(f'app{app_no}_imp_table',imp_df,include_index=False,background='RGB')
 
                     """
@@ -624,39 +570,12 @@ class GeneratePPT(Logger):
 if __name__ == '__main__':
     print('\nCAST Assessment Deck Generation Tool')
     print('Copyright (c) 2021 CAST Software Inc.\n')
-    print('If you need assistance, please contact Nevin Kaplan (NKA) or Guru Pai (GPR) from the CAST US PS team\n')
+    print('If you need assistance, please contact Nevin Kaplan (NKA) from the CAST US PS team\n')
 
     parser = argparse.ArgumentParser(description='Assessment Deck Generation Tool')
     parser.add_argument('-c','--config', required=True, help='Configuration properties file')
     args = parser.parse_args()
     ppt = GeneratePPT(Config(args.config))
     ppt.save_ppt()
-
-
-    # config = Properties()
-    # with open(args.config, 'rb') as config_file:
-    #     config.load(config_file)
-
-    #GeneratePPT(config)
-
-
-    """
-    # Retreive HL data and generated HL specific slides.
-    # TODO: Only if HL generation is enabled.
-    if ppt._generate_HL:
-        ppt.get_hl_data()
-    """
-
-
-    """
-    if generate_AIP:
-        if generate_HL:
-            GeneratePPT(project_name, app_list, template_name, output_folder, gen_hl = True, hl_user = hl_user, hl_pswd = hl_pswd)
-        else:
-            # TODO: Pass in AIP rest URL, too.
-            GeneratePPT(project_name, app_list, template_name, output_folder)
-    else:
-        pass
-    """
 
 

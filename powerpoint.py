@@ -6,6 +6,7 @@ from pptx.parts.chart import ChartPart
 from pptx.parts.embeddedpackage import EmbeddedXlsxPart
 from pptx.dml.color import ColorFormat, RGBColor
 from pptx.enum.dml import MSO_THEME_COLOR
+from pptx.table import _Cell,Table, _Row, _Column
 
 from logger import Logger
 from logging import INFO, error
@@ -306,6 +307,19 @@ class PowerPoint (Logger):
                 except IndexError:
                     self.warning('index error in update_table while setting background color')
 
+    def add_row(self,table: Table) -> _Row:
+        new_row = deepcopy(table._tbl.tr_lst[-1]) 
+        # duplicating last row of the table as a new row to be added
+
+        for tc in new_row.tc_lst:
+            cell = _Cell(tc, new_row.tc_lst)
+            run = self.merge_runs(cell.text_frame.paragraphs[0])
+            run.text = 'xxx' # defaulting cell contents to empty text
+
+        table._tbl.append(new_row) 
+        return new_row
+
+
     def update_table(self, name, df, include_index=True, background=None, forground=None, has_header=True):
         table_shape = self.get_shape_by_name(name)
         if table_shape != None and table_shape.has_table:
@@ -313,6 +327,17 @@ class PowerPoint (Logger):
 
             colnames = list(df.columns)
             self.debug(f'filling table {name} with {len(df.index)} rows of data')
+
+            # are there enough rows 
+            rows, cols = df.shape
+            trows = len(table._tbl.tr_lst)
+            drows = len(df.index)
+            
+            if trows-1 < drows:
+                nrc = drows-trows+1
+                for r in range(nrc):
+                    self.add_row(table)
+
 
             # Insert the row zero names
             if include_index:
@@ -326,8 +351,8 @@ class PowerPoint (Logger):
                         run = self.merge_runs(cell.text_frame.paragraphs[0])
                         run.text = text
                     except IndexError:
-                        self.warning(f'index error in update_table ({name}) while setting df index')
-            rows, cols = df.shape
+                        self.warning(f'index error in update_table ({name} @ row {col_index} with {text}) while setting df index')
+
             if background:
                 cols = cols-1
             if forground:

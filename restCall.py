@@ -369,6 +369,7 @@ class HLData(HLRestCall):
                 self.__data[s]['app_id']=app_id
                 self.__data[s]['cves']=cves
                 self.__data[s]['licenses']=lic
+                self.__data[s]['cloud']=self.get_cloud_data(app_id)
 
                 if cves.empty:
                     self.__data[s]['cve_crit_tot']=0
@@ -409,6 +410,9 @@ class HLData(HLRestCall):
 
     def has_data(self,app_id):
         return self.__data[app_id]['has data'] 
+
+    def get_cloud_info(self,app_id):
+        return self.__data[app_id]['cloud'] 
 
     def get_cve_crit_tot(self,app_id):
         return self.__data[app_id]['cve_crit_tot']
