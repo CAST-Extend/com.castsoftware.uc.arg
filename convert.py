@@ -246,38 +246,6 @@ class GeneratePPT(Logger):
                     loc = loc_df['Number of Code Lines']
                     self._ppt.replace_loc(loc,app_no)
 
-                    """
-                        Populate the document insites page
-                        The necessary data is found in the loc_tbl
-
-                        This section fetches data for Documentation slide, excludes certain columns, sorts with few column, 
-                        and based on score of particular element seggregates colors(Red, Yellow & Green) and update to app1_doc_table element.
-                        255,168,168 - Red shades
-                        255,234,168 - Yellow shades
-                        168,228,195 - Green shades
-                    doc_df = self._aip_data.doc_compliance(app_id)
-                    doc_df.sort_values(by=['Score','Rule'], inplace=True)
-                    doc_df['RGB'] = np.where(doc_df.Score >= 3,'194,236,213',np.where(doc_df.Score < 2,'255,210,210','255,240,194'))
-                    doc_df.Score = doc_df.Score.map('{:.2f}'.format)
-                    self._ppt.update_table(f'app{app_no}_doc_table',doc_df,include_index=False,background='RGB')
-                    """
-
-                    """
-                        Populate the document insites page
-                        The necessary data is found in the loc_tbl
-
-                        This section fetches data for Documentation slide, excludes certain columns, sorts with few column, 
-                        and based on score of particular element seggregates colors(Red, Yellow & Green) and update to app1_doc_table element.
-                        255,168,168 - Red shades
-                        255,234,168 - Yellow shades
-                        168,228,195 - Green shades
-                    doc_df = self._aip_data.doc_compliance(app_id)
-                    doc_df.sort_values(by=['Score','Rule'], inplace=True)
-                    doc_df['RGB'] = np.where(doc_df.Score >= 3,'194,236,213',np.where(doc_df.Score < 2,'255,210,210','255,240,194'))
-                    doc_df.Score = doc_df.Score.map('{:.2f}'.format)
-                    self._ppt.update_table(f'app{app_no+1}_doc_table',doc_df,include_index=False,background='RGB')
-                    """
-
                     loc_tbl = pd.DataFrame.from_dict(data=self._aip_data.get_loc_sizing(app_id),orient='index').drop('Critical Violations')
                     loc_tbl = loc_tbl.rename(columns={0:'loc'})
                     loc_tbl['percent'] = round((loc_tbl['loc'] / loc_tbl['loc'].sum()) * 100,2)
