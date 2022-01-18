@@ -331,6 +331,8 @@ class PowerPoint (Logger):
             # are there enough rows 
             rows, cols = df.shape
             trows = len(table._tbl.tr_lst)
+            if not has_header:
+                trows=trows+1
             drows = len(df.index)
             
             if trows-1 < drows:
