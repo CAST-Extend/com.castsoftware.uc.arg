@@ -256,7 +256,7 @@ class GeneratePPT(Logger):
 
                     if percent_comment < 15:
                         comment_level='low'
-                    if percent_comment in range(15, 20):
+                    if percent_comment > 15 and percent_comment <= 20:
                         comment_level='good'
                     else:
                         comment_level='high'
@@ -537,7 +537,7 @@ class GeneratePPT(Logger):
 
 if __name__ == '__main__':
     print('\nCAST Assessment Deck Generation Tool')
-    print('Copyright (c) 2021 CAST Software Inc.\n')
+    print('Copyright (c) 2022 CAST Software Inc.\n')
     print('If you need assistance, please contact Nevin Kaplan (NKA) from the CAST US PS team\n')
 
     parser = argparse.ArgumentParser(description='Assessment Deck Generation Tool')
