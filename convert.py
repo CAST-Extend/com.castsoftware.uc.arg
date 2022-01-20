@@ -256,10 +256,11 @@ class GeneratePPT(Logger):
 
                     if percent_comment < 15:
                         comment_level='low'
-                    if percent_comment > 15 and percent_comment <= 20:
+                    elif percent_comment > 15 and percent_comment <= 20:
                         comment_level='good'
                     else:
                         comment_level='high'
+                    
                     self._ppt.replace_text(f'{{app{app_no}_comment_hl}}',comment_level)
                     self._ppt.replace_text(f'{{app{app_no}_comment_level}}',comment_level)
                     self._ppt.replace_text(f'{{app{app_no}_comment_pct}}',percent_comment)
