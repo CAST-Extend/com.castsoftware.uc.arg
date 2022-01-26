@@ -15,7 +15,7 @@ class Config(Logger):
             with open(config, 'rb') as config_file:
                 self.__config = load(config_file)
 
-            for v in ['project','application','company']:
+            for v in ['project','application','company','template']:
                 if v not in self.__config or len(self.__config[v]) == 0:
                     raise ValueError(f"Required field '{v}' is missing from config.json")
 
