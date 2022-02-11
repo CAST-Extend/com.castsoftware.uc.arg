@@ -408,6 +408,9 @@ class HLData(HLRestCall):
             self._cve_df = DataFrame()
             self._lic_df = DataFrame()
 
+    def get_cve_data(self,app_id):
+        return self.__data[app_id]['cves']
+
     def has_data(self,app_id):
         return self.__data[app_id]['has data'] 
 
@@ -452,15 +455,11 @@ class HLData(HLRestCall):
         if lic is None:
             lic = DataFrame()
         else:
-            try:
-                lic.loc[lic['compliance']=='medium','compliance']='Medium'
-            except (KeyError):
-                self.logger.info(f'no medium risk licenses for {app_name}')
-            try:
-                lic.loc[lic['compliance']=='low','compliance']='High'
-            except (KeyError):
-                self.logger.info(f'no high risk licenses for {app_name}')
-        
+            lic.loc[lic['compliance']=='high','risk']='Low'
+            lic.loc[lic['compliance']=='medium','risk']='Medium'
+            lic.loc[lic['compliance']=='low','risk']='High'
+            lic.loc[lic['compliance']=='undefined','risk']='Undefined'
+       
         return lic
 
     def get_cve_info(self,app_name):

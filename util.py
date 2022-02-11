@@ -95,3 +95,36 @@ def format_table(writer, data, sheet_name,width):
         worksheet.set_column(col_num, col_num, w)
     return worksheet
 
+def find_nth(string, substring, n):
+   if (n == 1):
+       return string.find(substring)
+   else:
+       return string.find(substring, find_nth(string, substring, n - 1) + 1)
+
+def no_dups(string, separator,add_count=False):
+    alist = list(string.split(separator))
+    alist.sort()
+    nlist = []
+    clist = []
+    for i in alist:
+        if i not in nlist:
+            nlist.append(i)
+            clist.append(1)
+        else:
+            idx = nlist.index(i)
+            clist[idx]=clist[idx]+1
+
+    if add_count:
+        for val in nlist:
+            idx = nlist.index(val)
+            cnt = clist[idx]
+            
+            cval=''
+            if cnt > 1:
+                cval = f'({cnt})'
+            val = f'{val}{cval}'
+            nlist[idx]=val
+
+    string = separator.join(nlist)
+    return string
+

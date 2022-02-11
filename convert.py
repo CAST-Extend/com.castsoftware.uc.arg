@@ -1,9 +1,6 @@
 from logging import DEBUG, info, warn
 from pandas.core.frame import DataFrame
-from restCall import AipRestCall
-from restCall import AipData
-from restCall import HLRestCall
-from restCall import HLData
+from restCall import AipRestCall, AipData, HLRestCall, HLData
 from pptx import Presentation
 from powerpoint import PowerPoint
 from jproperties import Properties 
@@ -12,6 +9,9 @@ from actionPlan import ActionPlan
 from logger import Logger
 from IPython.display import display
 from config import Config
+from util import find_nth, no_dups
+
+
 
 import pandas as pd
 import numpy as np 
@@ -370,7 +370,7 @@ class GeneratePPT(Logger):
                 lic_df=self._hl_data.get_lic_info(hl_id)
                 lic_df=self._hl_data.sort_lic_info(lic_df)
                 oss_df=self._hl_data.get_cve_info(hl_id)
-                lic_summary = pd.DataFrame(columns=['License Type','Risk Factor','Component Count','Example'])
+                # lic_summary = pd.DataFrame(columns=['License Type','Risk Factor','Component Count','Example'])
 
                 crit_cve = self._hl_data.get_cve_crit_tot(hl_id)
                 crit_comp_tot = self._hl_data.get_cve_crit_comp_tot(hl_id)
@@ -391,39 +391,7 @@ class GeneratePPT(Logger):
                 self._ppt.replace_text(f'{{app{app_no}_high_cve_comp_ct}}',high_comp_tot)
                 self._ppt.replace_text(f'{{app{app_no}_med_cve_comp_ct}}',med_comp_tot)
 
-                self._ppt.replace_text(f'{{app{app_no}_high_lic_tot}}',self._hl_data.get_lic_high_tot(hl_id))
                 self._ppt.replace_text(f'{{app{app_no}_oss_cmpn_tot}}',oss_cmpnt_tot)
-
-                if not lic_df.empty:
-                    for ln in lic_df['license'].unique():
-                        data={}
-                        data['License Type']=ln
-
-                        lic_type=lic_df[lic_df['license']==ln]
-                        lic_cnt = len(lic_type)
-                        data['Component Count']=lic_cnt
-                        if lic_cnt > 0:
-                            data['Risk Factor']=lic_type.iloc[0]['compliance']
-                            data['Example']=", ".join(lic_type.head(3)['component'].tolist())
-                            lic_summary=lic_summary.append(data,ignore_index=True)
-
-                    #app1_HL_table_lic_risks
-                    if len(lic_summary.loc[lic_summary['Risk Factor']=='High'])>0:
-                        lic_summary.loc[lic_summary['Risk Factor']=='High','forground']='255,0,0'
-                    
-                    if len(lic_summary.loc[lic_summary['Risk Factor']=='Medium'])>0:
-                        lic_summary.loc[lic_summary['Risk Factor']=='Medium','forground']='209,125,13'
-
-                    self._ppt.update_table(f'app{app_no}_HL_table_lic_risks',
-                                        lic_summary,include_index=False,
-                                        forground='forground')
-                
-                    high_lic_total = len(lic_summary.loc[lic_summary['Risk Factor']=='High'])
-                else:
-                    self.info('No license risks found')
-
-
-                self._ppt.update_table(f'app{app_no}_HL_table_CVEs',oss_df,include_index=False)
 
                 if crit_cve is None:
                     crit_cve_eff = 0
@@ -459,6 +427,62 @@ class GeneratePPT(Logger):
                 self._ppt.replace_text(f'{{app{app_no}_med_sec_tot}}','{mid__cve}')
                 self._ppt.replace_text(f'{{app{app_no}_hl_fn_eff}}',crit_cve_eff)
                 self._ppt.replace_text(f'{{app{app_no}_hl_nt_eff}}',int(high_cve_eff + med_cve_eff))
+
+
+                '''
+                    License compliance table
+                
+                '''
+                lic_summary=self._hl_data.get_lic_info(hl_id)
+                if not lic_summary.empty:
+                    lic_summary=lic_summary[['component','version','release','license','risk']].drop_duplicates()
+                    lic_summary.sort_values(['risk','license','component','version'],inplace=True)
+
+                    lic_summary = lic_summary.groupby(['risk','license'])['component'].apply(lambda x: ','.join(x)).reset_index()
+                    lic_summary['comp count']=lic_summary['component'].str.count(',')+1
+                    
+                    #remove duplicates but show full count
+                    lic_summary['component']=lic_summary['component'].map(lambda x: no_dups(x,',',True))
+                    
+                    #only show the first 5 components
+                    lic_summary['component']=lic_summary['component'].map(lambda x: x[:find_nth(x,',',6)])
+                    lic_summary=lic_summary[['license','risk','comp count','component']]
+                    lic_summary.sort_values(['risk','license','comp count'],inplace=True)
+
+                    #remove low and undefined records from the table
+                    lic_summary=lic_summary[lic_summary["risk"].str.contains("Low")==False]
+                    lic_summary=lic_summary[lic_summary["risk"].str.contains("Undefined")==False]
+
+                    #modify the forground color
+                    lic_summary.loc[lic_summary['risk']=='High','forground']='255,0,0'
+                    lic_summary.loc[lic_summary['risk']=='Medium','forground']='209,125,13'
+
+                    #update the powerpoint table
+                    self._ppt.update_table(f'app{app_no}_HL_table_lic_risks',
+                                        lic_summary,include_index=False,
+                                        forground='forground')
+                
+                    #add the high and medium license risk counts to the deck
+                    self._ppt.replace_text(f'{{app{app_no}_high_lic_tot}}',
+                        lic_summary[lic_summary['risk']=='High']['comp count'].sum())
+                    self._ppt.replace_text(f'{{app{app_no}_med_lic_tot}}',
+                        lic_summary[lic_summary['risk']=='Medium']['comp count'].sum())
+
+                    self._ppt.update_table(f'app{app_no}_HL_table_CVEs',oss_df,include_index=False)
+
+
+
+                """
+                    Highlight risk slide
+                """
+                # cve_df = self._hl_data.get_cve_data(hl_id)[['component','cve','cweId','cweLabel','criticity']]
+                # high_df = cve_df.groupby(['component'])
+
+
+                # cve_df = cve_df.fillna('')
+                # cve_df = cve_df.loc[cve_df['cweId'],'cweId']='NVD-CWE-noinfo'
+                # cve_df.sort_values(by=['cweId','cve'], inplace=True, ascending = True)
+                # risk_df = cve_df.groupby(['cweId','cve']).size
 
                 """
                     Cloud ready excel sheet generation
