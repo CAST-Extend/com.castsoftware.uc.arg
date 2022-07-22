@@ -3,15 +3,14 @@ from pandas.core.frame import DataFrame
 from restCall import AipRestCall, AipData, HLRestCall, HLData
 from pptx import Presentation
 from powerpoint import PowerPoint
-from jproperties import Properties 
+#from jproperties import Properties 
 from pptx.dml.color import RGBColor
 from actionPlan import ActionPlan
 from logger import Logger
 from IPython.display import display
 from config import Config
 from util import find_nth, no_dups
-
-
+from stats import OssStats,AIPStats,LicenseStats
 
 import pandas as pd
 import numpy as np 
@@ -37,9 +36,10 @@ class GeneratePPT(Logger):
 
     def __init__(self, config):
         super().__init__()
+        self.__config = config
+
         out = f"{config.output}/Project {config.project} - Tech DD Findings.pptx"
         self.info(f'Generating {out}')
-
 
         # TODO: Handle cases where on HL data is needed and not AIP.
         if config.aip_active:
@@ -60,7 +60,7 @@ class GeneratePPT(Logger):
 
         self._ppt.replace_text("{app#_","{app1_")
 
-        self.replace_all_text(config)
+        self.replace_all_text()
 
     def remove_proc_slides(self,keep_it):
         indexes=[]
@@ -79,11 +79,11 @@ class GeneratePPT(Logger):
     def save_ppt(self):
         self._ppt.save()
 
-    def replace_all_text(self,config):
-        app_cnt = len(config.application)
-        self._ppt.replace_text("{project}", config.project)
+    def replace_all_text(self):
+        app_cnt = len(self.__config.application)
+        self._ppt.replace_text("{project}", self.__config.project)
         self._ppt.replace_text("{app_count}",app_cnt)
-        self._ppt.replace_text("{company}",config.company)
+        self._ppt.replace_text("{company}",self.__config.company)
 
         mydate = datetime.datetime.now()
         month = mydate.strftime("%B")
@@ -92,7 +92,7 @@ class GeneratePPT(Logger):
         self._ppt.replace_text("{year}",year)
 
         # replace AIP data global to all applications
-        if config.aip_active:
+        if self.__config.aip_active:
             all_apps_avg_grade = self._aip_data.calc_grades_all_apps()
 #            self._ppt.replace_text("{all_apps}",self._aip_data.get_all_app_text())
             self._ppt.replace_risk_factor(all_apps_avg_grade,search_str="{summary_")
@@ -108,80 +108,56 @@ class GeneratePPT(Logger):
                 self._ppt.replace_text("{end_immediate_action}","") 
                 self._ppt.replace_text("{high_risk_grade_names}",self._aip_data.text_from_list(risk_grades.index.values.tolist()))
 
-        app_list = config.aip_list
-        hl_list = config.hl_list
-        title_list = config.title_list
+        app_list = self.__config.aip_list
+        hl_list = self.__config.hl_list
 
-        # create instance of action plan class 
-        ap = ActionPlan (app_list,self._aip_data,self._ppt,config.output)
+        day_rate = 1600
 
-        summary_total_cost = 0
+        summary_near_term=AIPStats(day_rate)
+        summary_fix_now=AIPStats(day_rate)
+        summary_mid_long_term=AIPStats(day_rate)
+        hl_summary_critical=OssStats('',day_rate)
+        lic_summary = LicenseStats()
+        summary_components = 0
 
         for idx in range(0,app_cnt):
+            # create instance of action plan class 
+            self.ap = ActionPlan (app_list,self._aip_data,self._ppt,self.__config.output,day_rate)
+            fix_now_total=AIPStats(day_rate)
+            near_term_total=AIPStats(day_rate)
+            mid_long_term=AIPStats(day_rate)
+            summary_total=AIPStats(day_rate)
+
+            hl_near_term_total=AIPStats(day_rate)
+
+
             # replace application specific AIP data
             app_no = idx+1
             app_id = app_list[idx]
             hl_id = hl_list[idx]
-            app_title = title_list[idx]
+            app_title = self.__config.title_list[idx]
             self.info(f'Working on pages for {app_title}')
             self._ppt.replace_text(f'{{app{app_no}_name}}',app_title)
 
-            aip_fix_now_eff = aip_fix_now_cost = aip_fix_now_vio_cnt = 0
-            aip_near_term_eff = aip_near_term_cost = aip_near_term_vio_cnt = 0
-            aip_mid_eff = aip_mid_cost = aip_mid_vio_cnt = 0
-            aip_long_term_eff = aip_long_term_cost = aip_long_term_vio_cnt = 0
-
-            aip_fix_now_eff = aip_fix_now_cost = aip_fix_now_vio_cnt = 0
-            aip_near_term_eff = aip_near_term_cost = aip_near_term_vio_cnt = 0
-            aip_mid_eff = aip_mid_cost = aip_mid_vio_cnt = 0
-            aip_long_term_eff = aip_long_term_cost = aip_long_term_vio_cnt = 0
-
-            fix_now_eff = fix_now_cost = fix_now_vio_cnt = 0
-
-            fix_now_data = DataFrame()
-            fix_now_bus_txt = ''
-            fix_now_vio_txt = ''
-
-            near_term_eff = near_term_cost = near_term_vio_cnt = 0
-            near_term_data = DataFrame()
-            near_term_bus_txt = ''
-            near_term_vio_txt = ''
-
-            mid_eff = mid_cost = mid_vio_cnt = 0
-            mid_data = DataFrame()
-            mid_bus_txt = ''
-            mid_vio_txt = ''
-
-            # low_eff = low_cost = low_vio_cnt = 0
-            # low_data = DataFrame()
-            # low_bus_txt = ''
-            # low_vio_txt = ''
-
-            long_term_eff = long_term_cost = long_term_vio_cnt = 0
-            long_term_data = DataFrame()
-            long_term_bus_txt = ''
-            long_term_vio_txt = ''
-
-            summary_eff = summary_cost = summary_vio_cnt = 0
-            summary_data = DataFrame()
-            summary_bus_txt = ''
-            summary_vio_txt = ''
-
-            if config.aip_active:
+            if self.__config.aip_active:
                 if self._aip_data.has_data(app_id):
                     #self.info(f'Working on {app_id} ({self._appl_title[app_id]})')
 
                     # do risk factors for the executive summary page
-                    risk_grades = util.each_risk_factor(self._ppt, self._aip_data,app_id, app_no)
+                    risk_grades = self.each_risk_factor(self._aip_data,app_id, app_no)
                     self._ppt.replace_text(f'{{app{app_no}_high_risk_grade_names}}',util.list_to_text(risk_grades.index.values))
+                    self.fill_aip_grades(self._aip_data,app_id, app_no)
 
 
                     # Technical Overview - Technical details TABLE
                     grade_all = self._aip_data.get_app_grades(app_id)
-                    self._ppt.replace_risk_factor(grade_all,app_no)
+                    #self._ppt.replace_risk_factor(grade_all,app_no)
                     grade_by_tech_df = self._aip_data.get_grade_by_tech(app_id)
                     grades = grade_by_tech_df.drop(['Documentation',"ISO","ISO_EFF","ISO_MAINT","ISO_REL","ISO_SEC"],axis=1)
                     self._ppt.update_table(f'app{app_no}_grade_by_tech_table',grades)
+                    
+                    #add appmarq technology
+                    self._ppt.replace_text(f'{{app{app_no}_largest_tech}}',grade_by_tech_df.index[0])
 
                     # Technical Overview - Lines of code by technology GRAPH
                     self._ppt.update_chart(f'app{app_no}_sizing_pie_chart',grade_by_tech_df['LOC'])
@@ -197,33 +173,8 @@ class GeneratePPT(Logger):
                         risk_grades = self._aip_data.calc_health_grades_medium_risk(grade_all)
                     self._ppt.replace_text(f'{{app{app_no}_at_risk_grade_names}}',util.list_to_text(risk_grades.index.tolist()).lower())
 
-
-                    """
-                        Populate the strengths and improvement page
-                        The necessary data is found in the loc_tbl
-                    """
-                    imp_df = self._aip_data.tqi_compliance(app_id)
-                    imp_df.drop(columns=['Weight','Total','Succeeded','Compliance'],inplace=True)
-                    imp_df.sort_values(by=['Score','Rule'], inplace=True, ascending = False)
-
-                    file_name = f'{config.output}/health-{title_list[idx]}.xlsx'
-                    writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
-                    col_widths=[50,50,10,10,10]
-                    cloud_tab = util.format_table(writer,imp_df,'Health Data',col_widths)
-                    writer.save()
-
-                    imp_df.drop(columns=['Detail'],inplace=True)
-                    imp_df['RGB'] = np.where(imp_df.Score >= 3,'194,236,213',\
-                        np.where(imp_df.Score < 2,'255,210,210','255,240,194'))
-                    imp_df.Score = imp_df.Score.map('{:.2f}'.format)
-
-                    imp_df['Cause']=''
-                    with open('tech.json') as json_file:
-                        tech_data = json.load(json_file)
-                    imp_df['Cause']=imp_df['Key'].map(tech_data)
-
-                    imp_df = imp_df[['Rule','Score','Cause','Failed','RGB']]
-                    self._ppt.update_table(f'app{app_no}_imp_table',imp_df,include_index=False,background='RGB')
+                    self.fill_strengh_improvement_tbl(app_id,app_no)
+                    
 
                     """
                         Populate the document insites page
@@ -270,11 +221,11 @@ class GeneratePPT(Logger):
                     self._ppt.update_table(f'app{app_no}_loc_table',loc_tbl,has_header=False)
                     self._ppt.update_chart(f'app{app_no}_loc_pie_chart',loc_tbl['loc'])
 
-                    self._ppt.replace_grade(grade_all,app_no)
+                    # self._ppt.replace_grade(grade_all,app_no)
 
                     self.fill_sizing(app_id,app_no)
                     self.fill_critical_rules(app_id,app_no)
-
+                    self.fill_violations(app_id,app_no)
 
                     """
                         Get Action Plan data and combine it for the various slide combinations
@@ -286,73 +237,22 @@ class GeneratePPT(Logger):
                             3. Long term contains medium and low violation data
                             4. Excecutive Summary contains fix now and high violation data
                     """
-                    ap.fill_action_plan(app_id,app_no)
-                    self.fill_violations(app_id,app_no)
+                    self.ap.fill_action_plan(app_id,app_no)
+                    fix_now_total.add_effort(self.ap.fix_now.effort)
+                    fix_now_total.add_violations(self.ap.fix_now.violations)
 
-                    #calculate and print aip fix now action plan midigation items
-                    (aip_fix_now_eff, aip_fix_now_cost, aip_fix_now_vio_cnt, aip_fix_now_data) = \
-                        ap.get_extreme_costing()
-                    aip_fix_now_bus_txt = util.list_to_text(ap.business_criteria(aip_fix_now_data)) + ' '
-                    aip_fix_now_vio_txt = ap.list_violations(aip_fix_now_data)
+                    near_term_total.add_effort(self.ap.high.effort)
+                    near_term_total.add_violations(self.ap.high.violations)
 
-                    self._ppt.replace_text(f'{{app{app_no}_aip_fn_eff}}',aip_fix_now_eff)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_fn_cost}}',aip_fix_now_cost)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_fn_vio_cnt}}',aip_fix_now_vio_cnt)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_fn_bus_txt}}',aip_fix_now_bus_txt)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_fn_vio_txt}}',aip_fix_now_vio_txt)
+                    mid_long_term.add_effort(self.ap.medium.effort)
+                    mid_long_term.add_violations(self.ap.medium.violations)
+                    mid_long_term.add_effort(self.ap.low.effort)
+                    mid_long_term.add_violations(self.ap.low.violations)
 
-                    (aip_near_term_eff, aip_near_term_cost, aip_near_term_vio_cnt, aip_near_term_data) = \
-                        ap.get_high_costing()
-                    aip_near_term_bus_txt = util.list_to_text(ap.business_criteria(aip_near_term_data)) + ' '
-                    aip_near_term_vio_txt = ap.list_violations(aip_near_term_data)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_nt_eff}}',aip_near_term_eff)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_nt_cost}}',aip_near_term_cost)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_nt_vio_cnt}}',aip_near_term_vio_cnt)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_nt_bus_txt}}',aip_near_term_bus_txt)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_nt_vio_txt}}',aip_near_term_vio_txt)
-
-
-                    (aip_mid_term_eff, aip_mid_term_cost, aip_mid_term_vio_cnt, aip_mid_term_data) = ap.get_med_costing()
-                    aip_mid_term_bus_txt = util.list_to_text(ap.business_criteria(aip_mid_term_data)) + ' '
-                    aip_mid_term_vio_txt = ap.list_violations(aip_mid_term_data)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_mt_eff}}',aip_mid_term_eff)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_mt_cost}}',aip_mid_term_cost)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_mt_vio_cnt}}',aip_mid_term_vio_cnt)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_mt_bus_txt}}',aip_mid_term_bus_txt)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_mt_vio_txt}}',aip_mid_term_vio_txt)
-
-                    (aip_low_eff, aip_low_cost, aip_low_vio_cnt, aip_low_data) = ap.get_low_costing()
-                    aip_low_bus_txt = util.list_to_text(ap.business_criteria(aip_low_data)) + ' '
-                    aip_low_vio_txt = ap.list_violations(aip_low_data)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_low_eff}}',aip_low_eff)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_low_cost}}',aip_low_cost)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_low_vio_cnt}}',aip_low_vio_cnt)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_low_bus_txt}}',aip_low_bus_txt)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_low_vio_txt}}',aip_low_vio_txt)
-
-                    aip_long_term_data = pd.concat([aip_low_data,aip_mid_term_data],ignore_index=True)
-                    aip_long_term_bus_txt = util.list_to_text(ap.business_criteria(aip_long_term_data)) + ' '
-                    aip_long_term_vio_txt = ap.list_violations(aip_long_term_data)
-                    aip_long_term_eff = int(mid_eff) + int(aip_low_eff)
-                    aip_long_term_cost = float(mid_cost) + float(aip_low_cost)
-                    aip_long_term_vio_cnt = int(mid_vio_cnt) + int(aip_low_vio_cnt)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_lt_eff}}',aip_long_term_eff)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_lt_cost}}',aip_long_term_cost)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_lt_vio_cnt}}',aip_long_term_vio_cnt)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_lt_bus_txt}}',aip_long_term_bus_txt)
-                    self._ppt.replace_text(f'{{app{app_no}_aip_lt_vio_txt}}',aip_long_term_vio_txt)
-
-                    summary_data = pd.concat([aip_fix_now_data,aip_near_term_data],ignore_index=True)
-                    summary_bus_txt = util.list_to_text(ap.business_criteria(summary_data)) + ' '
-                    summary_vio_txt = ap.list_violations(summary_data)
-                    summary_eff = int(aip_fix_now_eff) + int(aip_near_term_eff)
-                    summary_cost = float(aip_fix_now_cost) + float(aip_near_term_cost)
-                    summary_vio_cnt = int(aip_fix_now_vio_cnt) + int(aip_near_term_vio_cnt)
-
-                    fix_now_eff = int(aip_fix_now_eff) 
-                    fix_now_cost = round(aip_fix_now_cost,2)
-                    near_term_eff = int(aip_near_term_eff)
-                    near_term_cost = round(aip_near_term_cost,2)
+                    # summary_near_term.add_effort(self.ap.high.effort)
+                    # summary_near_term.add_effort(self.ap.medium.effort)
+                    # summary_near_term.add_violations(self.ap.high.violations)
+                    # summary_near_term.add_violations(self.ap.medium.violations)
 
                     """
                         ISO-5055 slide
@@ -361,128 +261,33 @@ class GeneratePPT(Logger):
                             - add it to the app1_iso5055 table in the template
                     """
                     iso_df = self._aip_data.iso_rules(app_id)
-                    iso_df.loc[iso_df['violation']=='','background']='205,218,226'
-                    iso_df.loc[iso_df['violation']!='','background']='255,255,255'
-                    self._ppt.update_table(f'app{app_no}_iso5055',iso_df,
-                                           include_index=False,background='background')
+                    if not iso_df.empty:
+                        iso_df.loc[iso_df['violation']=='','background']='205,218,226'
+                        iso_df.loc[iso_df['violation']!='','background']='255,255,255'
+                        self._ppt.update_table(f'app{app_no}_iso5055',iso_df,
+                                            include_index=False,background='background')
+
             #replaceHighlight application specific data
-            if config.hl_active and self._hl_data.has_data(hl_id):
-                lic_df=self._hl_data.get_lic_info(hl_id)
-                lic_df=self._hl_data.sort_lic_info(lic_df)
-                oss_df=self._hl_data.get_cve_info(hl_id)
-                # lic_summary = pd.DataFrame(columns=['License Type','Risk Factor','Component Count','Example'])
+            if self.__config.hl_active and self._hl_data.has_data(hl_id):
+                (oss_crit,oss_high,oss_med,lic,components) = self.oss_risk_assessment(hl_id,app_no,day_rate)
+                fix_now_total.add_effort(oss_crit.effort)
+                fix_now_total.add_violations(oss_crit.violations)
 
-                crit_cve = self._hl_data.get_cve_crit_tot(hl_id)
-                crit_comp_tot = self._hl_data.get_cve_crit_comp_tot(hl_id)
+                near_term_total.add_effort(oss_high.effort)
+                near_term_total.add_effort(oss_med.effort)
 
-                high_cve = self._hl_data.get_cve_high_tot(hl_id)
-                high_comp_tot = self._hl_data.get_cve_high_comp_tot(hl_id)
+                hl_near_term_total.add_effort(oss_high.effort)
+                hl_near_term_total.add_effort(oss_med.effort)
+                hl_near_term_total.add_violations(oss_high.violations)
+                hl_near_term_total.add_violations(oss_med.violations)
+                hl_near_term_total.replace_text(self._ppt,app_no,'hl_near_term_total')
 
-                med_cve = self._hl_data.get_cve_med_tot(hl_id)
-                med_comp_tot = self._hl_data.get_cve_med_comp_tot(hl_id)
+                hl_summary_critical.add_components(oss_crit.components)
+                hl_summary_critical.add_violations(oss_crit.violations)
 
-                oss_cmpnt_tot = self._hl_data.get_oss_cmpn_tot(hl_id)
-
-                self._ppt.replace_text(f'{{app{app_no}_crit_sec_tot}}',crit_cve)
-                self._ppt.replace_text(f'{{app{app_no}_high_sec_tot}}',high_cve)
-                self._ppt.replace_text(f'{{app{app_no}_med_sec_tot}}',med_cve)
-
-                self._ppt.replace_text(f'{{app{app_no}_crit_cve_comp_ct}}',crit_comp_tot)
-                self._ppt.replace_text(f'{{app{app_no}_high_cve_comp_ct}}',high_comp_tot)
-                self._ppt.replace_text(f'{{app{app_no}_med_cve_comp_ct}}',med_comp_tot)
-
-                self._ppt.replace_text(f'{{app{app_no}_oss_cmpn_tot}}',oss_cmpnt_tot)
-
-                if crit_cve is None:
-                    crit_cve_eff = 0
-                    crit_cve_cost = 0
-                else:
-                    crit_cve_eff = math.ceil(crit_comp_tot/2)
-                    crit_cve_cost = crit_cve_eff * ap._day_rate /1000
-
-                if high_comp_tot is None:
-                    high_cve_eff = 0
-                    high_cve_cost = 0
-                else:
-                    high_cve_eff = math.ceil(high_comp_tot/2)
-                    high_cve_cost = high_cve_eff * ap._day_rate /1000
-
-                if med_comp_tot is None:
-                    med_cve_eff = 0
-                    med_cve_cost = 0
-                else:   
-                    med_cve_eff = math.ceil(med_comp_tot/2)
-                    med_cve_cost = med_cve_eff * ap._day_rate /1000
-
-                summary_eff = int(summary_eff) + int(crit_cve_eff+high_cve_eff+med_cve_eff)
-                summary_cost = round(summary_cost + crit_cve_cost + high_cve_cost + med_cve_cost,2)
-
-                fix_now_eff = int(aip_fix_now_eff) + int(crit_cve_eff)
-                fix_now_cost = round(aip_fix_now_cost + crit_cve_cost,2)
-
-                near_term_eff = int(aip_near_term_eff) + int(high_cve_eff) + int(med_cve_eff)
-                near_term_cost = round(aip_near_term_cost + high_cve_cost + med_cve_cost,2)
-
-                self._ppt.replace_text(f'{{app{app_no}_high_sec_tot}}','{high_cve}')
-                self._ppt.replace_text(f'{{app{app_no}_med_sec_tot}}','{mid__cve}')
-                self._ppt.replace_text(f'{{app{app_no}_hl_fn_eff}}',crit_cve_eff)
-                self._ppt.replace_text(f'{{app{app_no}_hl_nt_eff}}',int(high_cve_eff + med_cve_eff))
-
-
-                '''
-                    License compliance table
-                
-                '''
-                lic_summary=self._hl_data.get_lic_info(hl_id)
-                if not lic_summary.empty:
-                    lic_summary=lic_summary[['component','version','release','license','risk']].drop_duplicates()
-                    lic_summary.sort_values(['risk','license','component','version'],inplace=True)
-
-                    lic_summary = lic_summary.groupby(['risk','license'])['component'].apply(lambda x: ','.join(x)).reset_index()
-                    lic_summary['comp count']=lic_summary['component'].str.count(',')+1
-                    
-                    #remove duplicates but show full count
-                    lic_summary['component']=lic_summary['component'].map(lambda x: no_dups(x,',',True))
-                    
-                    #only show the first 5 components
-                    lic_summary['component']=lic_summary['component'].map(lambda x: x[:find_nth(x,',',6)])
-                    lic_summary=lic_summary[['license','risk','comp count','component']]
-                    lic_summary.sort_values(['risk','license','comp count'],inplace=True)
-
-                    #remove low and undefined records from the table
-                    lic_summary=lic_summary[lic_summary["risk"].str.contains("Low")==False]
-                    lic_summary=lic_summary[lic_summary["risk"].str.contains("Undefined")==False]
-
-                    #modify the forground color
-                    lic_summary.loc[lic_summary['risk']=='High','forground']='255,0,0'
-                    lic_summary.loc[lic_summary['risk']=='Medium','forground']='209,125,13'
-
-                    #update the powerpoint table
-                    self._ppt.update_table(f'app{app_no}_HL_table_lic_risks',
-                                        lic_summary,include_index=False,
-                                        forground='forground')
-                
-                    #add the high and medium license risk counts to the deck
-                    self._ppt.replace_text(f'{{app{app_no}_high_lic_tot}}',
-                        lic_summary[lic_summary['risk']=='High']['comp count'].sum())
-                    self._ppt.replace_text(f'{{app{app_no}_med_lic_tot}}',
-                        lic_summary[lic_summary['risk']=='Medium']['comp count'].sum())
-
-                    self._ppt.update_table(f'app{app_no}_HL_table_CVEs',oss_df,include_index=False)
-
-
-
-                """
-                    Highlight risk slide
-                """
-                # cve_df = self._hl_data.get_cve_data(hl_id)[['component','cve','cweId','cweLabel','criticity']]
-                # high_df = cve_df.groupby(['component'])
-
-
-                # cve_df = cve_df.fillna('')
-                # cve_df = cve_df.loc[cve_df['cweId'],'cweId']='NVD-CWE-noinfo'
-                # cve_df.sort_values(by=['cweId','cve'], inplace=True, ascending = True)
-                # risk_df = cve_df.groupby(['cweId','cve']).size
+                lic_summary.add_high(lic.high)
+                lic_summary.add_medium(lic.medium)
+                lic_summary.add_low(lic.low)
 
                 """
                     Cloud ready excel sheet generation
@@ -490,7 +295,7 @@ class GeneratePPT(Logger):
                 try:
                     cloud = self._hl_data.get_cloud_info(hl_id)
                     cloud = cloud[['cloudRequirement.display','Technology','cloudRequirement.ruleType','cloudRequirement.criticality','contributionScore','roadblocks']]
-                    file_name = f'{config.output}/cloud-{title_list[idx]}.xlsx'
+                    file_name = f'{self.__config.output}/cloud-{self.__config.title_list[idx]}.xlsx'
                     writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
                     col_widths=[50,10,10,10,10,10,10]
                     cloud_tab = util.format_table(writer,cloud,'Cloud Data',col_widths)
@@ -498,28 +303,53 @@ class GeneratePPT(Logger):
                 except Exception as e:
                     self.error(f'unknown error while processing cloud ready data: {str(e)}')
 
-            self._ppt.replace_text(f'{{app{app_no}_fn_tot_cost}}',fix_now_cost)
-            self._ppt.replace_text(f'{{app{app_no}_fn_tot_eff}}',fix_now_eff)
 
-            self._ppt.replace_text(f'{{app{app_no}_nt_tot_cost}}',near_term_cost)
-            self._ppt.replace_text(f'{{app{app_no}_nt_tot_eff}}',near_term_eff)
+            summary_fix_now.add_effort(fix_now_total.effort)
+            summary_fix_now.add_violations(fix_now_total.violations)
+            summary_near_term.add_effort(near_term_total.effort)
+            summary_near_term.add_violations(near_term_total.violations)
+            summary_mid_long_term.add_effort(mid_long_term.effort)
+            summary_mid_long_term.add_violations(mid_long_term.violations)
 
+            summary_total.add_effort(summary_fix_now.effort)
+            summary_total.add_effort(summary_near_term.effort)
+            summary_total.add_effort(summary_mid_long_term.effort)
+            summary_total.add_violations(summary_fix_now.violations)
+            summary_total.add_violations(summary_near_term.violations)
+            summary_total.add_violations(summary_mid_long_term.violations)
+            summary_total.add_data(summary_fix_now.data)
+            summary_total.add_data(summary_near_term.data)
+            summary_total.add_data(summary_mid_long_term.data)
+            summary_total.replace_text(self._ppt,app_no,'summary_total')
 
-            summary_total_cost = summary_total_cost + summary_cost
-            self._ppt.replace_text(f'{{app{app_no}_summary_eff}}',summary_eff)
-            self._ppt.replace_text(f'{{app{app_no}_summary_cost}}',summary_cost)
-            self._ppt.replace_text(f'{{app{app_no}_summary_vio_cnt}}',summary_vio_cnt)
-            self._ppt.replace_text(f'{{app{app_no}_summary_bus_txt}}',summary_bus_txt)
-            self._ppt.replace_text(f'{{app{app_no}_summary_vio_txt}}',summary_vio_txt)
+            #replace text for all aip and HL statistics in the powerpoint document
+            self.ap.fix_now.replace_text(self._ppt,app_no,'fix_now')
+            self.ap.high.replace_text(self._ppt,app_no,'high')
+            self.ap.medium.replace_text(self._ppt,app_no,'medium')
+            self.ap.low.replace_text(self._ppt,app_no,'low')
 
-        self._ppt.replace_text('{summary_total_cost}',summary_total_cost)  
-        if fix_now_eff > 0:
+            mid_long_term.replace_text(self._ppt,app_no,'mid_long_term')
+
+            fix_now_total.replace_text(self._ppt,app_no,'fix_now_total')
+            near_term_total.replace_text(self._ppt,app_no,'near_term_total')
+
+            # short_term.replace_text(self._ppt,app_no,'st')
+            # long_term.replace_text(self._ppt,app_no,'lt')
+        
+        #summary_fix_now_aip_hl.replace_text(self._ppt,'','hl_summary_fix_now')
+        summary_fix_now.replace_text(self._ppt,'','summary_fix_now')
+        summary_near_term.replace_text(self._ppt,'','summary_near_term')
+
+        hl_summary_critical.replace_text(self._ppt,'_summary_crit')
+        lic_summary.replace_text(self._ppt,'_summary')
+        self._ppt.replace_text('{app_summary_comp_tot}',summary_components)
+
+        show_stopper_flg = 'some'
+        if self.ap.fix_now.effort == 0:
             show_stopper_flg = 'no'
-        else:
-            show_stopper_flg = ''
         self._ppt.replace_text('{show_stopper_flg}',show_stopper_flg)  
 
-        avg_cost = float(summary_total_cost/app_cnt)   
+        avg_cost = float(summary_fix_now.cost/app_cnt)   
         if avg_cost < 50:
             hml_cost_flg = 'low'
         elif avg_cost > 50 and avg_cost < 100:
@@ -528,7 +358,108 @@ class GeneratePPT(Logger):
             hml_cost_flg = 'high'
         self._ppt.replace_text('{hml_cost_flag}',hml_cost_flg)  
 
-        self._ppt.replace_text('{daily_rate}',ap._day_rate)  
+        self._ppt.replace_text('{daily_rate}',self.ap._day_rate)  
+
+    def each_risk_factor(self, aip_data, app_id, app_no):
+        # collect the high risk grades
+        # if there are no high ris grades then use medium risk
+        app_level_grades = aip_data.get_app_grades(app_id)
+        risk_grades = aip_data.calc_health_grades_high_risk(app_level_grades)
+        risk_catagory="high"
+        if risk_grades.empty:
+            risk_catagory="medium"
+            risk_grades = aip_data.calc_health_grades_medium_risk(app_level_grades)
+        
+        #in the event all health risk factors are low risk
+        if risk_grades.empty:
+            self._ppt.replace_block(f'{{app{app_no}_risk_detail}}',
+                            f'{{end_app{app_no}_risk_detail}}',
+                            "no high-risk health factors")
+        else: 
+            rpl_str = f'{{app{app_no}_risk_category}}'
+            self._ppt.replace_text(rpl_str,risk_catagory)
+            self.info(f'replaced {rpl_str} with {risk_catagory}')
+
+            self._ppt.copy_block(f'app{app_no}_each_risk_factor',["_risk_name","_risk_grade"],len(risk_grades.count(axis=1)))
+            f=1
+            for index, row in risk_grades.T.iteritems():
+                rpl_str = f'{{app{app_no}_risk_name{f}}}'
+                self._ppt.replace_text(rpl_str,index)
+                self.info(f'replaced {rpl_str} with {index}')
+
+                rpl_str = f'{{app{app_no}_risk_grade{f}}}'
+                value = row['All'].round(2)
+                self._ppt.replace_text(rpl_str,value)
+                self.info(f'replaced {rpl_str} with {value}')
+                f=f+1
+
+        self._ppt.remove_empty_placeholders()
+        return risk_grades
+
+    def fill_aip_grades(self,aip_data, app_id, app_no):
+        app_level_grades = aip_data.get_app_grades(app_id)
+        for name, value in app_level_grades.T.iteritems():
+            # fill grades
+            grade = round(value,2)
+            rpl_str = f'{{app{app_no}_grade_{name}}}'
+            self._ppt.replace_text(rpl_str,grade)
+            self.info(f'replaced {rpl_str} with {grade}')
+
+            # fill grade risk factor (high, medium or low)
+            rpl_str = f'{{app{app_no}_risk_{name}}}'
+            risk = ''
+            if grade < 2:
+                risk = 'high'
+            elif grade < 3:
+                risk = 'medium'
+            else:
+                risk = 'low'
+            self._ppt.replace_text(rpl_str,risk)
+            self.info(f'replaced {rpl_str} with {risk}')
+
+            #update grade box color and slider postion 
+            box_name = f'app{app_no}_grade_{name}'
+            slider_name = f'app{app_no}_grade_chart_{name}'
+            for slide in self._ppt._prs.slides:
+                box = self._ppt.get_shape_by_name(box_name,slide)
+                if not box is None:
+                    color = self._ppt.get_grade_color(grade)
+                    box.line.color.rgb = color
+                
+                slider = self._ppt.get_shape_by_name(slider_name,slide)
+                if not slider is None:
+                    self._ppt.update_grade_slider(slider,[grade])
+
+
+
+
+    def fill_strengh_improvement_tbl(self,app_id,app_no):
+        """
+            Populate the strengths and improvement page
+            The necessary data is found in the loc_tbl
+        """
+        imp_df = self._aip_data.tqi_compliance(app_id)
+        imp_df.drop(columns=['Weight','Total','Succeeded','Compliance'],inplace=True)
+        imp_df.sort_values(by=['Score','Rule'], inplace=True, ascending = False)
+
+        file_name = f'{self.__config.output}/health-{self.__config.title_list[app_no-1]}.xlsx'
+        writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
+        col_widths=[50,50,10,10,10]
+        cloud_tab = util.format_table(writer,imp_df,'Health Data',col_widths)
+        writer.save()
+
+        imp_df.drop(columns=['Detail'],inplace=True)
+        imp_df['RGB'] = np.where(imp_df.Score >= 3,'194,236,213',\
+            np.where(imp_df.Score < 2,'255,210,210','255,240,194'))
+        imp_df.Score = imp_df.Score.map('{:.2f}'.format)
+
+        imp_df['Cause']=''
+        with open('tech.json') as json_file:
+            tech_data = json.load(json_file)
+        imp_df['Cause']=imp_df['Key'].map(tech_data)
+
+        imp_df = imp_df[['Rule','Score','Cause','Failed','RGB']]
+        self._ppt.update_table(f'app{app_no}_imp_table',imp_df,include_index=False,background='RGB')
 
     def fill_critical_rules(self,app_id,app_no):
         rules_df = self._aip_data.critical_rules(app_id)
@@ -559,6 +490,83 @@ class GeneratePPT(Logger):
         sizing_df['Tables']=pd.Series(["{0:,.0f}".format(val) for val in sizing_df['Tables']])
         sizing_df = sizing_df.transpose()
         self._ppt.update_table(f'app{app_no}_tech_sizing',sizing_df)
+
+    def oss_risk_assessment(self,hl_id,app_no,day_rate):
+        lic_df=self._hl_data.get_lic_info(hl_id)
+        lic_df=self._hl_data.sort_lic_info(lic_df)
+        oss_df=self._hl_data.get_cve_info(hl_id)
+        # lic_summary = pd.DataFrame(columns=['License Type','Risk Factor','Component Count','Example'])
+
+        oss_crit = OssStats(hl_id,day_rate,self._hl_data,'crit')
+        oss_crit_comp_tot = self._hl_data.get_cve_crit_comp_tot(hl_id)
+
+        oss_high = OssStats(hl_id,day_rate,self._hl_data,'high')
+        oss_high_comp_tot = self._hl_data.get_cve_high_comp_tot(hl_id)
+
+        oss_med = OssStats(hl_id,day_rate,self._hl_data,'med')
+        oss_med_comp_tot = self._hl_data.get_cve_med_comp_tot(hl_id)
+
+        total_components = self._hl_data.get_oss_cmpn_tot(hl_id)
+
+        oss_crit.replace_text(self._ppt,app_no)
+        oss_high.replace_text(self._ppt,app_no)
+        oss_med.replace_text(self._ppt,app_no)
+
+        self._ppt.replace_text(f'{{app{app_no}_oss_cmpn_tot}}',total_components)
+        if not oss_df.empty:
+            self._ppt.update_table(f'app{app_no}_HL_table_CVEs',oss_df,include_index=False)
+
+        '''
+            License compliance table
+        
+        '''
+        lic_summary=self._hl_data.get_lic_info(hl_id)
+        if not lic_summary.empty:
+            lic_summary=lic_summary[['component','version','release','license','risk']].drop_duplicates()
+            lic_summary.sort_values(['risk','license','component','version'],inplace=True)
+
+            lic_summary = lic_summary.groupby(['risk','license'])['component'].apply(lambda x: ','.join(x)).reset_index()
+            lic_summary['comp count']=lic_summary['component'].str.count(',')+1
+            
+            #remove duplicates but show full count
+            lic_summary['component']=lic_summary['component'].map(lambda x: no_dups(x,',',True))
+            
+            #only show the first 5 components
+            lic_summary['component']=lic_summary['component'].map(lambda x: x[:find_nth(x,',',6)])
+            lic_summary=lic_summary[['license','risk','comp count','component']]
+            lic_summary.sort_values(['risk','license','comp count'],inplace=True)
+
+            #remove low and undefined records from the table
+            lic_summary=lic_summary[lic_summary["risk"].str.contains("Low")==False]
+            lic_summary=lic_summary[lic_summary["risk"].str.contains("Undefined")==False]
+
+            # are there any records left?
+            lic = LicenseStats()
+            if not lic_summary.empty:
+                #modify the forground color
+                lic_summary.loc[lic_summary['risk']=='High','forground']='211,76,76'
+                lic_summary.loc[lic_summary['risk']=='Medium','forground']='127,127,127'
+
+                #update the powerpoint table
+                self._ppt.update_table(f'app{app_no}_HL_table_lic_risks',
+                                    lic_summary,include_index=False,
+                                    forground='forground')
+            
+                lic.high = lic_summary[lic_summary['risk']=='High']['comp count'].sum()
+                lic.medium = lic_summary[lic_summary['risk']=='Medium']['comp count'].sum()
+                lic.low = lic_summary[lic_summary['risk']=='Low']['comp count'].sum()
+
+                # #add the high and medium license risk counts to the deck
+                # self._ppt.replace_text(f'{{app{app_no}_high_lic_tot}}',
+                #     lic_summary[lic_summary['risk']=='High']['comp count'].sum())
+                # self._ppt.replace_text(f'{{app{app_no}_med_lic_tot}}',
+                #     lic_summary[lic_summary['risk']=='Medium']['comp count'].sum())
+
+            lic.replace_text(self._ppt,app_no)
+
+        return (oss_crit,oss_high,oss_med,lic,total_components)
+
+
 
 if __name__ == '__main__':
     print('\nCAST Assessment Deck Generation Tool')

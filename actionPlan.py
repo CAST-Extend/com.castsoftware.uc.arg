@@ -1,6 +1,12 @@
+from stats import AIPStats
+from logging import INFO
+from logger import Logger
+
 import math
 import util
 import pandas as pd
+
+
 
 
 """
@@ -14,58 +20,31 @@ class ActionPlan:
     _effort_df = None
     _output_folder = None
 
-    _day_rate=1600
-
-    __extrm_effort = 0
-    __high_effort = 0
-    __med_effort = 0
-    __low_effort = 0
-
-    __extrm_cost = 0
-    __high_cost = 0
-    __low_cost = 0
-    __med_cost = 0
-
-    __extrm_total = 0
-    __high_total = 0
-    __med_total = 0
-    __low_total = 0
-
-    __extrm_data = pd.DataFrame()
-    __high_data = pd.DataFrame()
-    __med_data = pd.DataFrame()
-    __low_data = pd.DataFrame()
-
-    def get_extreme_costing(self):    
-        return  self.__extrm_effort, \
-                self.__extrm_cost, \
-                self.__extrm_total, \
-                self.__extrm_data
-
-    def get_high_costing(self):  
-        return  self.__high_effort, \
-                self.__high_cost, \
-                self.__high_total, \
-                self.__high_data
-
-    def get_med_costing(self):    
-        return  self.__med_effort, \
-                self.__med_cost, \
-                self.__med_total, \
-                self.__med_data
-
-    def get_low_costing(self):    
-        return  self.__low_effort, \
-                self.__low_cost, \
-                self.__low_total, \
-                self.__low_data
-
-    def __init__(self,app_list,aip_data,ppt,output_folder):
+    def __init__(self,app_list,aip_data,ppt,output_folder,day_rate,logger_level=INFO):
         self._app_list = app_list
         self._output_folder=output_folder
         self._ppt = ppt
         self._aip_data=aip_data
         self._effort_df = pd.read_csv('./Effort.csv')
+
+        self._day_rate = day_rate
+        self._fix_now = AIPStats(day_rate)
+        self._high = AIPStats(day_rate)
+        self._med = AIPStats(day_rate)
+        self._low = AIPStats(day_rate)
+
+
+    @property
+    def fix_now(self): return self._fix_now
+    @property
+    def high(self): return self._high
+    @property
+    def medium(self): return self._med
+    @property
+    def low(self): return self._low
+    @property
+    def day_rate(self): return self._day_rate
+
 
     def fill_action_plan(self,app_id,app_no):
 
@@ -85,17 +64,11 @@ class ActionPlan:
             writer.save()
 
             #fill action plan related tags
-            (self.__extrm_effort,self.__extrm_cost,self.__extrm_total,self.__extrm_data) = \
-                self.calc_action_plan_effort(ap_summary_df,app_no,'extreme','security')
+            self._fix_now = self.calc_action_plan_effort(ap_summary_df,app_no,'extreme','security')
+            self._high = self.calc_action_plan_effort(ap_summary_df,app_no,'high')
+            self._med = self.calc_action_plan_effort(ap_summary_df,app_no,'moderate')
+            self._low = self.calc_action_plan_effort(ap_summary_df,app_no,'low')
             
-            (self.__high_effort,self.__high_cost,self.__high_total,self.__high_data) = \
-                self.calc_action_plan_effort(ap_summary_df,app_no,'high')
-
-            (self.__med_effort,self.__med_cost,self.__med_total,self.__med_data) = \
-                self.calc_action_plan_effort(ap_summary_df,app_no,'moderate')
-
-            (self.__low_effort,self.__low_cost,self.__low_total,self.__low_data) = \
-                self.calc_action_plan_effort(ap_summary_df,app_no,'low')
 
             #configure action plan table background colors 
             ap_summary_df.loc[ap_summary_df['tag']=='extreme','RGB']='244,212,212'
@@ -108,7 +81,6 @@ class ActionPlan:
                                   ap_summary_df[ap_summary_df['tag']=='moderate'],
                                   ap_summary_df[ap_summary_df['tag']=='low']])
 
-#            ap_table = ap_table.drop(columns=['comment','tag','Technical Criteria','Days Effort','Cost Est.','Eff Hours'],index=0)
             ap_table = ap_table.drop(columns=['comment','tag','Technical Criteria','Days Effort','Cost Est.','Eff Hours'])
 
             self._ppt.update_table(f'app{app_no}_action_plan',ap_table.head(29),include_index=False,background='RGB')
@@ -131,11 +103,12 @@ class ActionPlan:
             self._ppt.replace_text(f"{{app{app_no}_moderate_violation_total}}",'TBD') 
             self._ppt.replace_text(f"{{app{app_no}_low_violation_total}}",'TBD') 
 
-    def calc_action_plan_effort(self,ap_summary_df,app_no,priority,default=''):
-        (priority_text, vio_cnt, data) = self.common_business_criteria(ap_summary_df,priority,default)
-        effort = math.ceil(data['Days Effort'].sum()*2)
-        cost = (effort*self._day_rate)/1000
-        return effort, cost, vio_cnt, data
+    def calc_action_plan_effort(self,ap_summary_df,app_no,priority,default='') -> AIPStats: 
+        rslt = AIPStats(self._day_rate)
+        (priority_text, vio_cnt, rslt.data) = self.common_business_criteria(ap_summary_df,priority,default)
+        rslt.effort = math.ceil(rslt.data['Days Effort'].sum()*2)
+        rslt.violations = int(vio_cnt)
+        return rslt
 
     # def fill_action_plan_tags(self,app_no,type,effort,cost,vio_cnt,bus_txt,vio_txt):
     #     self._ppt.replace_text(f'{{app{app_no}_{type}_eff}}',effort)
@@ -171,24 +144,24 @@ class ActionPlan:
         return list
 
 
-    def list_violations(self,filtered):
-        first = True
-        text = ""
-        try:
-            for criteria in filtered['Technical Criteria'].unique():
-                df = filtered[filtered['Technical Criteria']==criteria]
-                total = df['No. of Actions'].sum()
+    # def list_violations(self,filtered):
+    #     first = True
+    #     text = ""
+    #     try:
+    #         for criteria in filtered['Technical Criteria'].unique():
+    #             df = filtered[filtered['Technical Criteria']==criteria]
+    #             total = df['No. of Actions'].sum()
                 
-                cases = 'for'
-                if first:
-                    cases = 'cases of'
-                    first = False
+    #             cases = 'for'
+    #             if first:
+    #                 cases = 'cases of'
+    #                 first = False
                 
-                rule = criteria[criteria.find('-')+1:].strip().lower()
-                if len(rule) == 0:
-                    rule = criteria
-                text = f'{text}{total} {cases} {rule}, '
-            return util.rreplace(text[:-2],', ',' and ')
-        except (KeyError):
-            return ""
+    #             rule = criteria[criteria.find('-')+1:].strip().lower()
+    #             if len(rule) == 0:
+    #                 rule = criteria
+    #             text = f'{text}{total} {cases} {rule}, '
+    #         return util.rreplace(text[:-2],', ',' and ')
+    #     except (KeyError):
+    #         return ""
             

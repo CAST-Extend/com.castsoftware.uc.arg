@@ -81,51 +81,51 @@ class PowerPoint (Logger):
                                         self.debug(f'invalid key: {g}')
                                         break;
 
-    def replace_grade(self, grades,app_no=0, search_str=None):
-        if search_str == None:
-            search_str=f'{{app{app_no}_grade_'
+    # def replace_grade(self, grades,app_no=0, search_str=None):
+    #     if search_str == None:
+    #         search_str=f'{{app{app_no}_grade_'
 
-        for slide in self._prs.slides:
-            for shape in slide.shapes:
-                if shape.has_text_frame:
-                    for paragraph in shape.text_frame.paragraphs:
-                        if paragraph.text.find(search_str)!=-1:
-                            cur_text=''
-                            first=True
-                            for run in paragraph.runs:
-                                cur_text = cur_text + run.text
-                                if first != True:
-                                    self.delete_run(run)
-                                first=False
-                            run = paragraph.runs[0]
-                            run.text = cur_text
+    #     for slide in self._prs.slides:
+    #         for shape in slide.shapes:
+    #             if shape.has_text_frame:
+    #                 for paragraph in shape.text_frame.paragraphs:
+    #                     if paragraph.text.find(search_str)!=-1:
+    #                         cur_text=''
+    #                         first=True
+    #                         for run in paragraph.runs:
+    #                             cur_text = cur_text + run.text
+    #                             if first != True:
+    #                                 self.delete_run(run)
+    #                             first=False
+    #                         run = paragraph.runs[0]
+    #                         run.text = cur_text
 
-                            while(True):
-                                t = cur_text.find(search_str)
-                                if t == -1: 
-                                    break
-                                g = cur_text[t+len(search_str):]
-                                g = g[:g.find("}")]
-                                if g:
-                                    grade=grades[g]
-                                    grade_str = str(round(grade,2))
-                                    if len(grade_str) < 4:
-                                        grade_str = grade_str + '0'
-                                    cur_text = cur_text.replace(f'{search_str}{g}}}',grade_str)
-                                    run.text = cur_text
+    #                         while(True):
+    #                             t = cur_text.find(search_str)
+    #                             if t == -1: 
+    #                                 break
+    #                             g = cur_text[t+len(search_str):]
+    #                             g = g[:g.find("}")]
+    #                             if g:
+    #                                 grade=grades[g]
+    #                                 grade_str = str(round(grade,2))
+    #                                 if len(grade_str) < 4:
+    #                                     grade_str = grade_str + '0'
+    #                                 cur_text = cur_text.replace(f'{search_str}{g}}}',grade_str)
+    #                                 run.text = cur_text
 
-                                    if cur_text == grade_str:
-                                        color = self.get_grade_color(grade)
-                                        run.font.color.rgb = color
-                                        shape.line.width=0
-                                        box_name = f'{search_str[1:]}{g}'
-                                        box = self.get_shape_by_name(box_name,slide)
-                                        if box != None:
-                                            box.line.color.rgb = color
-                                            self.update_grade_slider(f'{search_str[1:]}chart_{g}', [grade])
+    #                                 if cur_text == grade_str:
+    #                                     color = self.get_grade_color(grade)
+    #                                     run.font.color.rgb = color
+    #                                     shape.line.width=0
+    #                                     box_name = f'{search_str[1:]}{g}'
+    #                                     box = self.get_shape_by_name(box_name,slide)
+    #                                     if box != None:
+    #                                         box.line.color.rgb = color
+    #                                         self.update_grade_slider(f'{search_str[1:]}chart_{g}', [grade])
 
-    def update_grade_slider(self, name,data):
-        shape = self.get_shape_by_name(name)
+    def update_grade_slider(self, shape,data):
+        #shape = self.get_shape_by_name(name)
         try:
             if shape.has_chart:
                 chart_data = CategoryChartData()
@@ -135,9 +135,11 @@ class PowerPoint (Logger):
                 chart_data.add_series('Series 1', data)
                 shape.chart.replace_data(chart_data)
         except AttributeError as ae:
-            self.debug(f'Attribute Error, invalid template configuration: {name} ({ae})')
+            self.warning(f'Attribute Error, invalid template configuration: {shape.name} ({ae})')
         except KeyError as ke:
-            self.debug(f'Key Error, invalid template configuration: {name} ({ke})')
+            self.warning(f'Key Error, invalid template configuration: {shape.name} ({ke})')
+        except TypeError as t:
+            self.warning(f'Type Error, invalid template configuration: {shape.name} ({t})')
 
     def get_grade_color(self,grade):
         rgb = 0
@@ -194,9 +196,11 @@ class PowerPoint (Logger):
             t_parags = len(paragraph.runs)
             for run_idx in range(t_parags):
                 run = paragraph.runs[run_idx]
-                if '{' in run.text and '}' in run.text:
+#                if '{' in run.text and '}' in run.text and run.text.count('{')==run.text.count('}'):
+                if run.text.count('{')==run.text.count('}'):
                     run.text = run.text.replace(str(search_str), str(repl_str))
-                elif '{' in run.text and '}' not in run.text:
+#                elif '{' in run.text and '}' not in run.text:
+                elif run.text.count('{')!=run.text.count('}'):
                     #have a partial tag, need to merge runs
                     base_run = run
                     close_found = False
@@ -560,11 +564,16 @@ class PowerPoint (Logger):
                     if shape.has_text_frame:
                         for paragraph in shape.text_frame.paragraphs:
                             if paragraph.text == "{app_per_page}":
-    #                            self.replace_slide_text(slide,"{app_per_page}","")
                                 new_slide = self.copy_slide(idx)
                                 self.replace_slide_text(new_slide,"{app_per_page}","")
                                 self.replace_slide_text(new_slide,"{app1_",f'{{app{cnt}_')
                                 self.replace_shape_name(new_slide,"app1_",f'app{cnt}_')
+                            # if paragraph.text == "{multi_page}":
+                            #     new_slide = self.copy_slide(idx)
+                            #     self.replace_slide_text(new_slide,"{app_per_page}","")
+                            #     self.replace_slide_text(new_slide,"{app1_",f'{{app{cnt}_')
+                            #     self.replace_shape_name(new_slide,"app1_",f'app{cnt}_')
+
         for idx, slide in enumerate(self._prs.slides):
             for shape in slide.shapes:
                 if shape.has_text_frame:

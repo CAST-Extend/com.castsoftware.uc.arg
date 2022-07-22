@@ -1,14 +1,20 @@
+"""
+    Read and validate configuration file
+"""
 from logging import DEBUG, info, warn, error
 from logger import Logger
 from json import load
 from argparse import ArgumentParser
 from json import JSONDecodeError
 
+__author__ = "Nevin Kaplan"
+__copyright__ = "Copyright 2022, CAST Software"
+__email__ = "n.kaplan@castsoftware.com"
+
 class Config(Logger):
 
     def __init__(self, config):
         super().__init__("Config")
-        
 
         #do all required fields contain data
         try:

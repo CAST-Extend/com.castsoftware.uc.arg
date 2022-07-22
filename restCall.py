@@ -126,8 +126,11 @@ class AipData(AipRestCall):
             except KeyError as e:
                 self.warning(f'no iso rules for {value} ({e})')
 
-        rslt_df['category'] = rslt_df['category'].mask(rslt_df['category'].ne(rslt_df['category'].shift()).cumsum().duplicated(), '')
-
+        if 'category' in rslt_df.columns:
+            rslt_df['category'] = rslt_df['category'].mask(rslt_df['category'].ne(rslt_df['category'].shift()).cumsum().duplicated(), '')
+        else:
+            self.warning('No ISO rules found')
+            
         return rslt_df
 
     def domain(self, app):
@@ -298,6 +301,7 @@ class AipData(AipRestCall):
 
     def get_grade_by_tech(self,app):
         grade_df = self.grades(app).round(2).applymap('{:,.2f}'.format)
+        grade_df = self.grades(app).round(2)
         grade_df = grade_df[grade_df.index.isin(['All'])==False]
 
         sizing_df = DataFrame(self.sizing(app))
@@ -311,8 +315,12 @@ class AipData(AipRestCall):
         sizing_df = sizing_df[sizing_df.index.isin(['All'])==False]
         sizing_df = DataFrame(sizing_df["Critical Violations"]).dropna()
         sizing_df = sizing_df.applymap('{:,.0f}'.format)
-        tech = tech.join(sizing_df)
 
+        tech = tech.join(sizing_df)
+        tech.sort_values(by='LOC',ascending=False,inplace=True)
+#        tech = tech.applymap('{:,.2f}'.format)
+
+        
         return tech
 
     def get_high_risk_grade_text(self, grades):
@@ -413,6 +421,9 @@ class HLData(HLRestCall):
 
     def has_data(self,app_id):
         return self.__data[app_id]['has data'] 
+
+    def get_data(self,app_id):
+        return self.__data[app_id]
 
     def get_cloud_info(self,app_id):
         return self.__data[app_id]['cloud'] 
