@@ -110,7 +110,7 @@ class AIPStats():
             msg = f'{msg}, vio_txt'
             ppt.replace_text(f'{{{base_txt}_vio_txt}}',vio_txt)
         msg = f'{msg})'
-        self._log.info(msg)
+        self._log.debug(msg)
         
 
 class LicenseStats():
@@ -150,7 +150,7 @@ class LicenseStats():
 
     def replace_text(self,ppt,app_no):
         base_txt = f'app{app_no}_hl_lic'
-        self._log.info(f'Replacing {base_txt} tags (_high, _med, _low)')
+        self._log.debug(f'Replacing {base_txt} tags (_high={self.high}, _med={self.medium}, _low={self.low})')
         ppt.replace_text(f'{{{base_txt}_high}}',self.high)
         ppt.replace_text(f'{{{base_txt}_med}}',self.medium)
         ppt.replace_text(f'{{{base_txt}_low}}',self.low)
@@ -215,7 +215,7 @@ class OssStats():
 
     def replace_text(self,ppt,app_no):
         base_txt = f'app{app_no}_hl_{self._priority}'
-        self._log.info(f'Replacing {base_txt} tags (_eff, _comp_tot, _cost, _vio_cnt)')
+        self._log.debug(f'Replacing {base_txt} tags (_eff={self.effort}, _comp_tot={self.components}, _cost={self.cost}, _vio_cnt={self.violations})')
         ppt.replace_text(f'{{{base_txt}_eff}}',self.effort)
         ppt.replace_text(f'{{{base_txt}_comp_tot}}',self.components)
         ppt.replace_text(f'{{{base_txt}_cost}}',self.cost)
