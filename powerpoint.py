@@ -141,17 +141,6 @@ class PowerPoint (Logger):
         except TypeError as t:
             self.warning(f'Type Error, invalid template configuration: {shape.name} ({t})')
 
-    def get_grade_color(self,grade):
-        rgb = 0
-        if grade > 3:
-            rgb = RGBColor(0,176,80) # light green
-        elif grade <3 and grade > 2:
-            rgb = RGBColor(214,142,48) # yellow
-        else:
-            rgb = RGBColor(255,0,0) # red
-        return rgb
-
-
     def replace_text (self, search_str, repl_str, tbd_for_blanks=True,slide=None):
         if tbd_for_blanks:
             skip = False
@@ -197,7 +186,7 @@ class PowerPoint (Logger):
             for run_idx in range(t_parags):
                 run = paragraph.runs[run_idx]
 #                if '{' in run.text and '}' in run.text and run.text.count('{')==run.text.count('}'):
-                if run.text.count('{')==run.text.count('}'):
+                if run.text.count('{')==run.text.count('}') and search_str in run.text:
                     run.text = run.text.replace(str(search_str), str(repl_str))
 #                elif '{' in run.text and '}' not in run.text:
                 elif run.text.count('{')!=run.text.count('}'):
@@ -310,6 +299,12 @@ class PowerPoint (Logger):
                     run.font.color.rgb=RGBColor(int(rgb[0]), int(rgb [1]), int(rgb[2]))
                 except IndexError:
                     self.warning('index error in update_table while setting background color')
+
+    def change_paragraph_color(self,paragraph,rgb):
+        run = self.merge_runs(paragraph)
+        run.font.color.rgb=RGBColor(int(rgb[0]), int(rgb [1]), int(rgb[2]))
+
+
 
     def add_row(self,table: Table) -> _Row:
         new_row = deepcopy(table._tbl.tr_lst[-1]) 
@@ -554,8 +549,6 @@ class PowerPoint (Logger):
         elif loc > 500000:
             size_catagory = 'large'
         self.replace_text(f'{{app{app_no}_loc_category}}',size_catagory)
-
-    
  
     def duplicate_slides(self, app_cnt):
         for cnt in range(2,app_cnt+1):

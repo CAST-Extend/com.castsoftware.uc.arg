@@ -3,14 +3,15 @@ from requests import codes
 from pandas import DataFrame
 from pandas import json_normalize
 from pandas import concat
+from logging import DEBUG, INFO, ERROR, warning
 
 
 class HLRestCall(RestCall):
     """
     Class to handle HL REST API calls.
     """
-    def __init__(self, hl_base_url, hl_user, hl_pswd, hl_instance, timer_on=False):
-        super().__init__(hl_base_url, hl_user, hl_pswd, timer_on)
+    def __init__(self, hl_base_url, hl_user, hl_pswd, hl_instance, timer_on=False,log_level=INFO):
+        super().__init__(hl_base_url, hl_user, hl_pswd, timer_on,log_level)
 
         self._hl_instance = hl_instance
         self._hl_data_retrieved = False

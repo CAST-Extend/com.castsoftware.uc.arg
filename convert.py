@@ -1,3 +1,4 @@
+from distutils.command.config import config
 from logging import DEBUG, info, warn
 from pandas.core.frame import DataFrame
 from restCall import AipRestCall, AipData, HLRestCall, HLData
@@ -35,21 +36,22 @@ class GeneratePPT(Logger):
     _hl_app_list = []
 
     def __init__(self, config):
-        super().__init__()
-        self.__config = config
+        super().__init__("generate",config.logging_generate)
+        self._config = config
 
         out = f"{config.output}/Project {config.project} - Tech DD Findings.pptx"
         self.info(f'Generating {out}')
 
+        self._ppt = PowerPoint(config.template, out)
+
         # TODO: Handle cases where on HL data is needed and not AIP.
         if config.aip_active:
             self.info("Collecting AIP Data")
-            self._aip_data = AipData(config)
+            self._aip_data = AipData(config,log_level=config.logging_aip)
         if config.hl_active:
             self.info("Collecting Highlight Data")
-            self._hl_data = HLData(config)
+            self._hl_data = HLData(config,log_level=config.logging_highlight)
 
-        self._ppt = PowerPoint(config.template, out)
         #project level work
         app_cnt = len(config.application)
 
@@ -80,10 +82,10 @@ class GeneratePPT(Logger):
         self._ppt.save()
 
     def replace_all_text(self):
-        app_cnt = len(self.__config.application)
-        self._ppt.replace_text("{project}", self.__config.project)
+        app_cnt = len(self._config.application)
+        self._ppt.replace_text("{project}", self._config.project)
         self._ppt.replace_text("{app_count}",app_cnt)
-        self._ppt.replace_text("{company}",self.__config.company)
+        self._ppt.replace_text("{company}",self._config.company)
 
         mydate = datetime.datetime.now()
         month = mydate.strftime("%B")
@@ -92,7 +94,7 @@ class GeneratePPT(Logger):
         self._ppt.replace_text("{year}",year)
 
         # replace AIP data global to all applications
-        if self.__config.aip_active:
+        if self._config.aip_active:
             all_apps_avg_grade = self._aip_data.calc_grades_all_apps()
 #            self._ppt.replace_text("{all_apps}",self._aip_data.get_all_app_text())
             self._ppt.replace_risk_factor(all_apps_avg_grade,search_str="{summary_")
@@ -108,45 +110,45 @@ class GeneratePPT(Logger):
                 self._ppt.replace_text("{end_immediate_action}","") 
                 self._ppt.replace_text("{high_risk_grade_names}",self._aip_data.text_from_list(risk_grades.index.values.tolist()))
 
-        app_list = self.__config.aip_list
-        hl_list = self.__config.hl_list
+        app_list = self._config.aip_list
+        hl_list = self._config.hl_list
 
         day_rate = 1600
 
-        summary_near_term=AIPStats(day_rate)
-        summary_fix_now=AIPStats(day_rate)
-        summary_mid_long_term=AIPStats(day_rate)
-        hl_summary_critical=OssStats('',day_rate)
-        lic_summary = LicenseStats()
+        summary_near_term=AIPStats(day_rate,logger_level=self._config.logging_generate)
+        summary_fix_now=AIPStats(day_rate,logger_level=self._config.logging_generate)
+        summary_mid_long_term=AIPStats(day_rate,logger_level=self._config.logging_generate)
+        hl_summary_critical=OssStats('',day_rate,logger_level=self._config.logging_generate)
+        lic_summary = LicenseStats(logger_level=self._config.logging_generate)
         summary_components = 0
 
         for idx in range(0,app_cnt):
             # create instance of action plan class 
-            self.ap = ActionPlan (app_list,self._aip_data,self._ppt,self.__config.output,day_rate)
-            fix_now_total=AIPStats(day_rate)
-            near_term_total=AIPStats(day_rate)
-            mid_long_term=AIPStats(day_rate)
-            summary_total=AIPStats(day_rate)
+            self.ap = ActionPlan (app_list,self._aip_data,self._ppt,self._config.output,day_rate)
+            fix_now_total=AIPStats(day_rate,logger_level=self._config.logging_generate)
+            near_term_total=AIPStats(day_rate,logger_level=self._config.logging_generate)
+            mid_long_term=AIPStats(day_rate,logger_level=self._config.logging_generate)
+            summary_total=AIPStats(day_rate,logger_level=self._config.logging_generate)
 
-            hl_near_term_total=AIPStats(day_rate)
+            hl_near_term_total=AIPStats(day_rate,logger_level=self._config.logging_generate)
 
 
             # replace application specific AIP data
             app_no = idx+1
             app_id = app_list[idx]
             hl_id = hl_list[idx]
-            app_title = self.__config.title_list[idx]
+            app_title = self._config.title_list[idx]
             self.info(f'Working on pages for {app_title}')
             self._ppt.replace_text(f'{{app{app_no}_name}}',app_title)
 
-            if self.__config.aip_active:
+            if self._config.aip_active:
                 if self._aip_data.has_data(app_id):
                     #self.info(f'Working on {app_id} ({self._appl_title[app_id]})')
 
                     # do risk factors for the executive summary page
+                    self.fill_aip_grades(self._aip_data,app_id, app_no)
                     risk_grades = self.each_risk_factor(self._aip_data,app_id, app_no)
                     self._ppt.replace_text(f'{{app{app_no}_high_risk_grade_names}}',util.list_to_text(risk_grades.index.values))
-                    self.fill_aip_grades(self._aip_data,app_id, app_no)
 
 
                     # Technical Overview - Technical details TABLE
@@ -268,7 +270,7 @@ class GeneratePPT(Logger):
                                             include_index=False,background='background')
 
             #replaceHighlight application specific data
-            if self.__config.hl_active and self._hl_data.has_data(hl_id):
+            if self._config.hl_active and self._hl_data.has_data(hl_id):
                 (oss_crit,oss_high,oss_med,lic,components) = self.oss_risk_assessment(hl_id,app_no,day_rate)
                 fix_now_total.add_effort(oss_crit.effort)
                 fix_now_total.add_violations(oss_crit.violations)
@@ -295,7 +297,7 @@ class GeneratePPT(Logger):
                 try:
                     cloud = self._hl_data.get_cloud_info(hl_id)
                     cloud = cloud[['cloudRequirement.display','Technology','cloudRequirement.ruleType','cloudRequirement.criticality','contributionScore','roadblocks']]
-                    file_name = f'{self.__config.output}/cloud-{self.__config.title_list[idx]}.xlsx'
+                    file_name = f'{self._config.output}/cloud-{self._config.title_list[idx]}.xlsx'
                     writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
                     col_widths=[50,10,10,10,10,10,10]
                     cloud_tab = util.format_table(writer,cloud,'Cloud Data',col_widths)
@@ -378,23 +380,33 @@ class GeneratePPT(Logger):
         else: 
             rpl_str = f'{{app{app_no}_risk_category}}'
             self._ppt.replace_text(rpl_str,risk_catagory)
-            self.info(f'replaced {rpl_str} with {risk_catagory}')
+            self.debug(f'replaced {rpl_str} with {risk_catagory}')
 
             self._ppt.copy_block(f'app{app_no}_each_risk_factor',["_risk_name","_risk_grade"],len(risk_grades.count(axis=1)))
             f=1
             for index, row in risk_grades.T.iteritems():
                 rpl_str = f'{{app{app_no}_risk_name{f}}}'
                 self._ppt.replace_text(rpl_str,index)
-                self.info(f'replaced {rpl_str} with {index}')
+                self.debug(f'replaced {rpl_str} with {index}')
 
                 rpl_str = f'{{app{app_no}_risk_grade{f}}}'
                 value = row['All'].round(2)
                 self._ppt.replace_text(rpl_str,value)
-                self.info(f'replaced {rpl_str} with {value}')
+                self.debug(f'replaced {rpl_str} with {value}')
                 f=f+1
 
         self._ppt.remove_empty_placeholders()
         return risk_grades
+
+    def get_grade_color(self,grade):
+        rgb = 0
+        if grade > 3:
+            rgb = RGBColor(0,176,80) # light green
+        elif grade <3 and grade > 2:
+            rgb = RGBColor(214,142,48) # yellow
+        else:
+            rgb = RGBColor(255,0,0) # red
+        return rgb
 
     def fill_aip_grades(self,aip_data, app_id, app_no):
         app_level_grades = aip_data.get_app_grades(app_id)
@@ -403,7 +415,7 @@ class GeneratePPT(Logger):
             grade = round(value,2)
             rpl_str = f'{{app{app_no}_grade_{name}}}'
             self._ppt.replace_text(rpl_str,grade)
-            self.info(f'replaced {rpl_str} with {grade}')
+            self.debug(f'replaced {rpl_str} with {grade}')
 
             # fill grade risk factor (high, medium or low)
             rpl_str = f'{{app{app_no}_risk_{name}}}'
@@ -415,17 +427,25 @@ class GeneratePPT(Logger):
             else:
                 risk = 'low'
             self._ppt.replace_text(rpl_str,risk)
-            self.info(f'replaced {rpl_str} with {risk}')
+            self.debug(f'replaced {rpl_str} with {risk}')
 
             #update grade box color and slider postion 
-            box_name = f'app{app_no}_grade_{name}'
-            slider_name = f'app{app_no}_grade_chart_{name}'
+            id_base = f'app{app_no}_grade'
+            box_name = f'{id_base}_{name}_box'
+            txt_name = f'{id_base}_{name}_text'
+            slider_name = f'{id_base}_{name}_slider'
+            color = self.get_grade_color(grade)
+
             for slide in self._ppt._prs.slides:
                 box = self._ppt.get_shape_by_name(box_name,slide)
                 if not box is None:
-                    color = self._ppt.get_grade_color(grade)
                     box.line.color.rgb = color
-                
+
+                txt = self._ppt.get_shape_by_name(txt_name,slide)
+                if not txt is None and txt.has_text_frame:
+                    paragraphs = txt.text_frame.paragraphs
+                    self._ppt.change_paragraph_color(paragraphs[0],color)
+
                 slider = self._ppt.get_shape_by_name(slider_name,slide)
                 if not slider is None:
                     self._ppt.update_grade_slider(slider,[grade])
@@ -442,7 +462,7 @@ class GeneratePPT(Logger):
         imp_df.drop(columns=['Weight','Total','Succeeded','Compliance'],inplace=True)
         imp_df.sort_values(by=['Score','Rule'], inplace=True, ascending = False)
 
-        file_name = f'{self.__config.output}/health-{self.__config.title_list[app_no-1]}.xlsx'
+        file_name = f'{self._config.output}/health-{self._config.title_list[app_no-1]}.xlsx'
         writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
         col_widths=[50,50,10,10,10]
         cloud_tab = util.format_table(writer,imp_df,'Health Data',col_widths)
@@ -454,7 +474,7 @@ class GeneratePPT(Logger):
         imp_df.Score = imp_df.Score.map('{:.2f}'.format)
 
         imp_df['Cause']=''
-        with open('tech.json') as json_file:
+        with open(self._config.cause) as json_file:
             tech_data = json.load(json_file)
         imp_df['Cause']=imp_df['Key'].map(tech_data)
 
@@ -497,13 +517,13 @@ class GeneratePPT(Logger):
         oss_df=self._hl_data.get_cve_info(hl_id)
         # lic_summary = pd.DataFrame(columns=['License Type','Risk Factor','Component Count','Example'])
 
-        oss_crit = OssStats(hl_id,day_rate,self._hl_data,'crit')
+        oss_crit = OssStats(hl_id,day_rate,self._hl_data,'crit',logger_level=self._config.logging_generate)
         oss_crit_comp_tot = self._hl_data.get_cve_crit_comp_tot(hl_id)
 
-        oss_high = OssStats(hl_id,day_rate,self._hl_data,'high')
+        oss_high = OssStats(hl_id,day_rate,self._hl_data,'high',logger_level=self._config.logging_generate)
         oss_high_comp_tot = self._hl_data.get_cve_high_comp_tot(hl_id)
 
-        oss_med = OssStats(hl_id,day_rate,self._hl_data,'med')
+        oss_med = OssStats(hl_id,day_rate,self._hl_data,'med',logger_level=self._config.logging_generate)
         oss_med_comp_tot = self._hl_data.get_cve_med_comp_tot(hl_id)
 
         total_components = self._hl_data.get_oss_cmpn_tot(hl_id)
@@ -541,7 +561,7 @@ class GeneratePPT(Logger):
             lic_summary=lic_summary[lic_summary["risk"].str.contains("Undefined")==False]
 
             # are there any records left?
-            lic = LicenseStats()
+            lic = LicenseStats(logger_level=self._config.logging_generate)
             if not lic_summary.empty:
                 #modify the forground color
                 lic_summary.loc[lic_summary['risk']=='High','forground']='211,76,76'
