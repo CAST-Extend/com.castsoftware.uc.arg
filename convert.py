@@ -118,7 +118,9 @@ class GeneratePPT(Logger):
         summary_near_term=AIPStats(day_rate,logger_level=self._config.logging_generate)
         summary_fix_now=AIPStats(day_rate,logger_level=self._config.logging_generate)
         summary_mid_long_term=AIPStats(day_rate,logger_level=self._config.logging_generate)
+        hl_summary=OssStats('',day_rate,logger_level=self._config.logging_generate)
         hl_summary_critical=OssStats('',day_rate,logger_level=self._config.logging_generate)
+        hl_summary_high_near=OssStats('',day_rate,logger_level=self._config.logging_generate)
         lic_summary = LicenseStats(logger_level=self._config.logging_generate)
         summary_components = 0
 
@@ -248,8 +250,10 @@ class GeneratePPT(Logger):
 
                     mid_long_term.add_effort(self.ap.medium.effort)
                     mid_long_term.add_violations(self.ap.medium.violations)
+                    mid_long_term.add_data(self.ap.medium.data)
                     mid_long_term.add_effort(self.ap.low.effort)
                     mid_long_term.add_violations(self.ap.low.violations)
+                    mid_long_term.add_data(self.ap.low.data)
 
                     # summary_near_term.add_effort(self.ap.high.effort)
                     # summary_near_term.add_effort(self.ap.medium.effort)
@@ -272,11 +276,11 @@ class GeneratePPT(Logger):
             #replaceHighlight application specific data
             if self._config.hl_active and self._hl_data.has_data(hl_id):
                 (oss_crit,oss_high,oss_med,lic,components) = self.oss_risk_assessment(hl_id,app_no,day_rate)
-                fix_now_total.add_effort(oss_crit.effort)
-                fix_now_total.add_violations(oss_crit.violations)
+                # fix_now_total.add_effort(oss_crit.effort)
+                # fix_now_total.add_violations(oss_crit.violations)
 
-                near_term_total.add_effort(oss_high.effort)
-                near_term_total.add_effort(oss_med.effort)
+                # near_term_total.add_effort(oss_high.effort)
+                # near_term_total.add_effort(oss_med.effort)
 
                 hl_near_term_total.add_effort(oss_high.effort)
                 hl_near_term_total.add_effort(oss_med.effort)
@@ -286,6 +290,11 @@ class GeneratePPT(Logger):
 
                 hl_summary_critical.add_components(oss_crit.components)
                 hl_summary_critical.add_violations(oss_crit.violations)
+
+                hl_summary_high_near.add_components(oss_high.components)
+                hl_summary_high_near.add_components(oss_med.components)
+
+                hl_summary.add_components(components)
 
                 lic_summary.add_high(lic.high)
                 lic_summary.add_medium(lic.medium)
@@ -324,6 +333,7 @@ class GeneratePPT(Logger):
             summary_total.add_data(summary_mid_long_term.data)
             summary_total.replace_text(self._ppt,app_no,'summary_total')
 
+
             #replace text for all aip and HL statistics in the powerpoint document
             self.ap.fix_now.replace_text(self._ppt,app_no,'fix_now')
             self.ap.high.replace_text(self._ppt,app_no,'high')
@@ -343,7 +353,9 @@ class GeneratePPT(Logger):
         summary_near_term.replace_text(self._ppt,'','summary_near_term')
 
         hl_summary_critical.replace_text(self._ppt,'_summary_crit')
+        hl_summary_high_near.replace_text(self._ppt,'_summary_high_near')
         lic_summary.replace_text(self._ppt,'_summary')
+        hl_summary.replace_text(self._ppt,'_summary')
         self._ppt.replace_text('{app_summary_comp_tot}',summary_components)
 
         show_stopper_flg = 'some'

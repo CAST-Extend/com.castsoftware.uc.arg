@@ -98,16 +98,16 @@ class AIPStats():
         bus_txt = util.list_to_text(self.business_criteria(self.data)) + ' '
         vio_txt = self.list_violations(self.data)
         base_txt = f'app{app_no}_aip_{priority}'
-        msg = f'Replacing {base_txt} (_eff, _cost, _vio_cnt'
+        msg = f'Replacing {base_txt} (_eff={self.effort}, _cost={self.cost}, _vio_cnt={self.violations}'
 
         ppt.replace_text(f'{{{base_txt}_eff}}',self.effort)
         ppt.replace_text(f'{{{base_txt}_cost}}',self.cost)
         ppt.replace_text(f'{{{base_txt}_vio_cnt}}',self.violations)
         if len(bus_txt) > 0:
-            msg = f'{msg}, bus_txt'
+            msg = f'{msg}, bus_txt={bus_txt}'
             ppt.replace_text(f'{{{base_txt}_bus_txt}}',bus_txt)
         if len(vio_txt) > 0:
-            msg = f'{msg}, vio_txt'
+            msg = f'{msg}, vio_txt={vio_txt}'
             ppt.replace_text(f'{{{base_txt}_vio_txt}}',vio_txt)
         msg = f'{msg})'
         self._log.debug(msg)
