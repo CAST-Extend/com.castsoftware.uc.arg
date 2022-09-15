@@ -29,7 +29,6 @@ class AipRestCall(RestCall):
     }
 
     def get_domain(self, schema_name):
-        self.debug(f'retrieving domain for {schema_name}')
         domain_id = None
         (status,json) = self.get()
         if status == codes.ok:
@@ -42,7 +41,6 @@ class AipRestCall(RestCall):
         return domain_id
 
     def get_quality_indicators(self,domain_id,snapshot_id, key):
-        self.debug(f'retrieving quality indicators information for {domain_id}/{key}')
         url = f'{domain_id}/quality-indicators/{key}/snapshots/{snapshot_id}'
 
         (status,json) = self.get(url)
@@ -52,7 +50,6 @@ class AipRestCall(RestCall):
             return None
 
     def get_violation_ratio(self,domain_id, key):
-        self.debug(f'retrieving violation ratio information for {domain_id}/{key}')
         url = f'{domain_id}/applications/3/results?quality-indicators=cc:{key},nc:{key}&select=violationRatio'
         (status,json) = self.get(url)
         if status == codes.ok and len(json) > 0:
@@ -61,7 +58,6 @@ class AipRestCall(RestCall):
             return None
 
     def get_grade(self,domain_id, key):
-        self.debug(f'retrieving grade information for {domain_id}/{key}')
         url = f'{domain_id}/applications/3/results?quality-indicators={key}'
         (status,json) = self.get(url)
         if status == codes.ok and len(json) > 0:
@@ -70,7 +66,6 @@ class AipRestCall(RestCall):
             return None
 
     def get_latest_snapshot(self,domain_id):
-        self.debug(f'retrieving latest snapshot information for {domain_id}')
         snapshot = {}
         (status,json) = self.get(f'{domain_id}/applications/3/snapshots')
         if status == codes.ok and len(json) > 0:
@@ -82,7 +77,6 @@ class AipRestCall(RestCall):
         return snapshot 
 
     def get_grades_by_technology(self,domain_id,snapshot):
-        self.debug(f'retrieving grades by technology for domain {domain_id} and snapshot {snapshot}')
         first_tech=True
         grade = DataFrame(columns=list(self._measures.values()))
         for tech in snapshot['technology']:
@@ -110,7 +104,6 @@ class AipRestCall(RestCall):
         return grade
 
     def get_sizing_by_technology(self,domain_id,snapshot,sizing):
-        self.debug(f'retrieving sizing by technology for domain {domain_id} and snapshot {snapshot}')
         first_tech=True
         size_df = DataFrame(columns=list(sizing.values()))
         for tech in snapshot['technology']:
@@ -133,7 +126,6 @@ class AipRestCall(RestCall):
         return size_df
 
     def get_distribution_sizing(self, domain_id, metric_id):
-        self.debug(f'retrieving distribution sizing for domain {domain_id} and metric id {metric_id}')
         rslt = DataFrame(columns=['name','value'])
         (status,json) = self.get(f'{domain_id}/applications/3/results?metrics={metric_id}&select=categories')
         if status == codes.ok and len(json) > 0:
@@ -171,8 +163,12 @@ class AipRestCall(RestCall):
         tech_criteria = ''
         rslt_df =  DataFrame()
         ap_summary_df =  DataFrame()
+        crow = 1
+
         url = f'{domain_id}/applications/3/snapshots/{snapshot_id}/action-plan/issues?startRow=1&nbRows=100000'
+        self.debug('begin - get action plan records')
         (status,json) = self.get(url)
+        self.debug('end - get action plan records')
         if status == codes.ok and len(json) > 0:
             rslt_df = DataFrame(json)
             rule_pattern = json_normalize(rslt_df['rulePattern']).add_prefix('rule.')
@@ -180,7 +176,7 @@ class AipRestCall(RestCall):
             rule_pattern = rule_pattern.rename(columns={"rule.href":"rule.id"})
 
             component = json_normalize(rslt_df['component']).add_prefix('component.') 
-            component.drop(component.columns.difference(['component.name','component.shortName']),1,inplace=True)
+            component.drop(columns=component.columns.difference(['component.name','component.shortName']),axis=1,inplace=True)
 
             remediation = json_normalize(rslt_df['remedialAction']) 
             rslt_df = rule_pattern.join([component,remediation])                                                  
@@ -210,7 +206,7 @@ class AipRestCall(RestCall):
             rslt_df = rslt_df.sort_values(by=['rule.id'])
             ap_summary_df = rslt_df.groupby(['rule.name']).count()
             business = DataFrame(rslt_df,columns=['rule.name','tech_criteria','Business Criteria','tag','comment']).drop_duplicates()
-            ap_summary_df.drop(ap_summary_df.columns.difference(['rule.name','component.name']),1,inplace=True)
+            ap_summary_df.drop(columns=ap_summary_df.columns.difference(['rule.name','component.name']),axis=1,inplace=True)
             ap_summary_df = merge(ap_summary_df,business, on='rule.name')
             ap_summary_df = ap_summary_df[['rule.name','Business Criteria','component.name','comment','tag','tech_criteria']]
             ap_summary_df = ap_summary_df.rename(columns={'component.name':'No. of Actions',

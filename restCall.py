@@ -27,7 +27,7 @@ import json
     This class is used to retrieve information from the CAST AIP REST API
 """
 class AipData(AipRestCall):
-    __data={}
+    _data={}
     _base=[]
 
     _sizing = {
@@ -63,43 +63,64 @@ class AipData(AipRestCall):
         #self._base=app_list
 
         for s in config.aip_list:
-            self.info(f'Collecting AIP data for {s}')
-            self.__data[s]={}
-            self.__data[s]['has data'] = False
+            self.info(f'*******Collecting AIP data for {s}********')
+            self._data[s]={}
+            self._data[s]['has data'] = False
             central_schema = f'{s}_central'
             domain_id = self.get_domain(central_schema)
             if domain_id == -1:
                 raise SystemExit  #connection failed, exit here
             if domain_id is not None:
-                self.__data[s]['domain_id']=domain_id
+                self._data[s]['domain_id']=domain_id
                 snapshot = self.get_latest_snapshot(domain_id)
-                self.__data[s]['snapshot']=snapshot
-                if self.__data[s]['snapshot']:
-                    self.__data[s]['has data'] = True
-                    self.__data[s]['tqi_compliance']=self.aggregate_violation_ratio(domain_id,snapshot['id'],'60017',self._imp_list)
-                    self.__data[s]['doc_compliance']=self.aggregate_violation_ratio(domain_id,snapshot['id'],'66033',self._doc_list,False)
-                    self.__data[s]['grades']=self.get_grades_by_technology(domain_id,self.__data[s]['snapshot'])
-                    self.__data[s]['sizing']=self.get_sizing_by_technology(domain_id,self.__data[s]['snapshot'],self._sizing)
-                    self.__data[s]['loc_sizing']=self.get_sizing(domain_id,self._sizing) 
-                    self.__data[s]['tech_sizing']=self.get_sizing(domain_id,self._tech_sizing) 
-                    self.__data[s]['violation_sizing']=self.get_violation_CR(domain_id)
-                    self.__data[s]['critical_rules']=self.get_rules(domain_id,self.__data[s]['snapshot']['id'],60017,non_critical=False)
-                    self.__data[s]['ISO']=self.__get_iso_rules(domain_id,snapshot['id'])
+                self._data[s]['snapshot']=snapshot
+                if self._data[s]['snapshot']:
+                    self.info('AIP is active')
+                    self._data[s]['has data'] = True
 
-                    (ap_df,ap_summary_df) = self.get_action_plan(domain_id,self.__data[s]['snapshot']['id']) 
-                    self.__data[s]['action_plan']=ap_df
-                    self.__data[s]['action_plan_summary']=ap_summary_df
+                    self.info('TQI compliance data')
+                    self._data[s]['tqi_compliance']=self.aggregate_violation_ratio(domain_id,snapshot['id'],'60017',self._imp_list)
+
+                    self.info('documentation compliance data')
+                    self._data[s]['doc_compliance']=self.aggregate_violation_ratio(domain_id,snapshot['id'],'66033',self._doc_list,False)
+
+                    self.info('Grades by technololgy')
+                    self._data[s]['grades']=self.get_grades_by_technology(domain_id,self._data[s]['snapshot'])
+
+                    self.info('Sizing by technical')
+                    self._data[s]['sizing']=self.get_sizing_by_technology(domain_id,self._data[s]['snapshot'],self._sizing)
+
+                    self.info('LOC data')
+                    self._data[s]['loc_sizing']=self.get_sizing(domain_id,self._sizing) 
+
+                    self.info('Technical sizing data')
+                    self._data[s]['tech_sizing']=self.get_sizing(domain_id,self._tech_sizing) 
+
+                    self.info('Violation sizing data')
+                    self._data[s]['violation_sizing']=self.get_violation_CR(domain_id)
+
+                    self.info('Critical rules')
+                    self._data[s]['critical_rules']=self.get_rules(domain_id,self._data[s]['snapshot']['id'],60017,non_critical=False)
+
+                    self.info('ISO rules')
+                    self._data[s]['ISO']=self.__get_iso_rules(domain_id,snapshot['id'])
+
+                    self.info('action plan data')
+                    (ap_df,ap_summary_df) = self.get_action_plan(domain_id,self._data[s]['snapshot']['id']) 
+                    self._data[s]['action_plan']=ap_df
+                    self._data[s]['action_plan_summary']=ap_summary_df
+                    self.info('AIP data retrieval complete')
             else:
                 self.logger.warn(f'Domain not found for {s}')
 
     def has_data(self, app):
-        return self.__data[app]['has data']
+        return self._data[app]['has data']
 
     def data(self,app):
-        return self.__data[app]
+        return self._data[app]
 
     def iso_rules(self, app):
-        return self.__data[app]['ISO']
+        return self._data[app]['ISO']
 
     def __get_iso_rules(self,domain_id,snapshot_id):
         iso={1061004:"Security",
@@ -126,8 +147,11 @@ class AipData(AipRestCall):
             except KeyError as e:
                 self.warning(f'no iso rules for {value} ({e})')
 
-        rslt_df['category'] = rslt_df['category'].mask(rslt_df['category'].ne(rslt_df['category'].shift()).cumsum().duplicated(), '')
-
+        if 'category' in rslt_df.columns:
+            rslt_df['category'] = rslt_df['category'].mask(rslt_df['category'].ne(rslt_df['category'].shift()).cumsum().duplicated(), '')
+        else:
+            self.warning('No ISO rules found')
+            
         return rslt_df
 
     def domain(self, app):
@@ -152,7 +176,7 @@ class AipData(AipRestCall):
         return self.data(app)['doc_compliance']
 
     def aggregate_violation_ratio(self,domain_id, snapshot_id,key,sub_keys,crit_only=True):
-        # self.debug(f'aggregating violation ration information for {app}')
+        self.debug(f'aggregating violation ration information for {domain_id}{snapshot_id}')
         # sid = self.snapshot(app)['id']
         # domain_id = self.domain(app)
         
@@ -244,7 +268,7 @@ class AipData(AipRestCall):
 
     def calc_grades_all_apps(self):
         all_app=DataFrame()
-        for row in self.__data:
+        for row in self._data:
             if self.has_data(row):
                 app_name=self.snapshot(row)['name']
                 grades=self.grades(row)
@@ -279,7 +303,7 @@ class AipData(AipRestCall):
     def get_all_app_text(self):
         rslt = ""
 
-        data = self.__data
+        data = self._data
         l = len(self._base)
         if l == 1:
             return self.snapshot(self._base[0])['name']
@@ -298,6 +322,7 @@ class AipData(AipRestCall):
 
     def get_grade_by_tech(self,app):
         grade_df = self.grades(app).round(2).applymap('{:,.2f}'.format)
+        grade_df = self.grades(app).round(2)
         grade_df = grade_df[grade_df.index.isin(['All'])==False]
 
         sizing_df = DataFrame(self.sizing(app))
@@ -311,8 +336,12 @@ class AipData(AipRestCall):
         sizing_df = sizing_df[sizing_df.index.isin(['All'])==False]
         sizing_df = DataFrame(sizing_df["Critical Violations"]).dropna()
         sizing_df = sizing_df.applymap('{:,.0f}'.format)
-        tech = tech.join(sizing_df)
 
+        tech = tech.join(sizing_df)
+        tech.sort_values(by='LOC',ascending=False,inplace=True)
+#        tech = tech.applymap('{:,.2f}'.format)
+
+        
         return tech
 
     def get_high_risk_grade_text(self, grades):
@@ -351,48 +380,48 @@ class AipData(AipRestCall):
 
 """
 class HLData(HLRestCall):
-    __data={}
+    _data={}
 
-    def __init__(self, config, timer_on=False):
-        super().__init__(config.hl_url, config.hl_user, config.hl_password, config.hl_instance, timer_on)
+    def __init__(self, config, timer_on=False,log_level=INFO):
+        super().__init__(config.hl_url, config.hl_user, config.hl_password, config.hl_instance, timer_on,log_level)
 
         for s in config.hl_list:
             self.info(f'Collecting Highlight data for {s}')
-            self.__data[s]={}
-            self.__data[s]['has data'] = False
+            self._data[s]={}
+            self._data[s]['has data'] = False
 
             app_id = self.get_app_id(s)
             if app_id:
                 (lic,cves,total_components) = self.get_third_party(app_id)
                 
-                self.__data[s]['has data'] = True
-                self.__data[s]['app_id']=app_id
-                self.__data[s]['cves']=cves
-                self.__data[s]['licenses']=lic
-                self.__data[s]['cloud']=self.get_cloud_data(app_id)
+                self._data[s]['has data'] = True
+                self._data[s]['app_id']=app_id
+                self._data[s]['cves']=cves
+                self._data[s]['licenses']=lic
+                self._data[s]['cloud']=self.get_cloud_data(app_id)
 
                 if cves.empty:
-                    self.__data[s]['cve_crit_tot']=0
-                    self.__data[s]['cve_crit_comp_tot']=0
-                    self.__data[s]['cve_high_tot']=0
-                    self.__data[s]['cve_high_comp_tot']=0
-                    self.__data[s]['cve_med_tot']=0
-                    self.__data[s]['cve_med_comp_tot']=0
+                    self._data[s]['cve_crit_tot']=0
+                    self._data[s]['cve_crit_comp_tot']=0
+                    self._data[s]['cve_high_tot']=0
+                    self._data[s]['cve_high_comp_tot']=0
+                    self._data[s]['cve_med_tot']=0
+                    self._data[s]['cve_med_comp_tot']=0
                 else:
-                    self.__data[s]['cve_crit_tot']=len(cves[cves['criticity']=='CRITICAL']['cve'].unique())
-                    self.__data[s]['cve_crit_comp_tot']=len(cves[cves['criticity']=='CRITICAL']['component'].unique())
-                    self.__data[s]['cve_high_tot']=len(cves[cves['criticity']=='HIGH']['cve'].unique())
-                    self.__data[s]['cve_high_comp_tot']=len(cves[cves['criticity']=='HIGH']['component'].unique())
-                    self.__data[s]['cve_med_tot']=len(cves[cves['criticity']=='MEDIUM']['cve'].unique())
-                    self.__data[s]['cve_med_comp_tot']=len(cves[cves['criticity']=='MEDIUM']['component'].unique())
+                    self._data[s]['cve_crit_tot']=len(cves[cves['criticity']=='CRITICAL']['cve'].unique())
+                    self._data[s]['cve_crit_comp_tot']=len(cves[cves['criticity']=='CRITICAL']['component'].unique())
+                    self._data[s]['cve_high_tot']=len(cves[cves['criticity']=='HIGH']['cve'].unique())
+                    self._data[s]['cve_high_comp_tot']=len(cves[cves['criticity']=='HIGH']['component'].unique())
+                    self._data[s]['cve_med_tot']=len(cves[cves['criticity']=='MEDIUM']['cve'].unique())
+                    self._data[s]['cve_med_comp_tot']=len(cves[cves['criticity']=='MEDIUM']['component'].unique())
                 if lic.empty:
-                    self.__data[s]['lic_high_tot']=0
-                    self.__data[s]['lic_med_tot']=0
+                    self._data[s]['lic_high_tot']=0
+                    self._data[s]['lic_med_tot']=0
                 else:
-                    self.__data[s]['lic_high_tot']=len(lic[lic['compliance']=='low']['component'].unique())
-                    self.__data[s]['lic_med_tot']=len(lic[lic['compliance']=='medium']['component'].unique())
+                    self._data[s]['lic_high_tot']=len(lic[lic['compliance']=='low']['component'].unique())
+                    self._data[s]['lic_med_tot']=len(lic[lic['compliance']=='medium']['component'].unique())
 
-                self.__data[s]['total_components']=total_components
+                self._data[s]['total_components']=total_components
             else:
                 self.error(f'Highlight Application Id not found for {s}')    
         #    self._base = schema
@@ -408,66 +437,68 @@ class HLData(HLRestCall):
             self._cve_df = DataFrame()
             self._lic_df = DataFrame()
 
+    def get_cve_data(self,app_id):
+        return self._data[app_id]['cves']
+
     def has_data(self,app_id):
-        return self.__data[app_id]['has data'] 
+        return self._data[app_id]['has data'] 
+
+    def get_data(self,app_id):
+        return self._data[app_id]
 
     def get_cloud_info(self,app_id):
-        return self.__data[app_id]['cloud'] 
+        return self._data[app_id]['cloud'] 
 
     def get_cve_crit_tot(self,app_id):
-        return self.__data[app_id]['cve_crit_tot']
+        return self._data[app_id]['cve_crit_tot']
     def get_cve_crit_comp_tot(self,app_id):
-        return self.__data[app_id]['cve_crit_comp_tot']
+        return self._data[app_id]['cve_crit_comp_tot']
 
     def get_cve_high_tot(self,app_id):
-        return self.__data[app_id]['cve_high_tot']
+        return self._data[app_id]['cve_high_tot']
     def get_cve_high_comp_tot(self,app_id):
-        return self.__data[app_id]['cve_high_comp_tot']
+        return self._data[app_id]['cve_high_comp_tot']
 
     def get_cve_med_tot(self,app_id):
-        return self.__data[app_id]['cve_med_tot']
+        return self._data[app_id]['cve_med_tot']
     def get_cve_med_comp_tot(self,app_id):
-        return self.__data[app_id]['cve_med_comp_tot']
+        return self._data[app_id]['cve_med_comp_tot']
 
     def get_lic_high_tot(self,app_id):
-        return self.__data[app_id]['lic_high_tot']
+        return self._data[app_id]['lic_high_tot']
 
     def get_lic_med_tot(self,app_id):
-        return self.__data[app_id]['lic_med_tot']
+        return self._data[app_id]['lic_med_tot']
 
     def get_oss_cmpn_tot(self,app_id):
-        return self.__data[app_id]['total_components']
+        return self._data[app_id]['total_components']
         
 
     def get_third_party_info(self,app_id):
-        return DataFrame(self.__data[app_id]['components'])
+        return DataFrame(self._data[app_id]['components'])
 
     def get_lic_info(self,app_name):
         """
             Extract all license relavent columns from the components DF 
         """
-        lic = self.__data[app_name]['licenses']
+        lic = self._data[app_name]['licenses']
 
         #adjust license risk factors
         if lic is None:
             lic = DataFrame()
         else:
-            try:
-                lic.loc[lic['compliance']=='medium','compliance']='Medium'
-            except (KeyError):
-                self.logger.info(f'no medium risk licenses for {app_name}')
-            try:
-                lic.loc[lic['compliance']=='low','compliance']='High'
-            except (KeyError):
-                self.logger.info(f'no high risk licenses for {app_name}')
-        
+            lic.loc[lic['compliance']=='high','risk']='Low'
+            lic.loc[lic['compliance']=='medium','risk']='Medium'
+            lic.loc[lic['compliance']=='low','risk']='High'
+            lic.loc[lic['compliance']=='undefined','risk']='Undefined'
+       
         return lic
 
     def get_cve_info(self,app_name):
         """
             Extract all license relavent columns from the components DF 
         """
-        cves = self.__data[app_name]['cves']
+        cves = self._data[app_name]['cves']
         oss_df = DataFrame(columns=['component','critical','high','medium'])
 
         if cves is not None and not cves.empty:
