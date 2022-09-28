@@ -197,6 +197,9 @@ class GeneratePPT(Logger):
                     doc_df.Score = doc_df.Score.map('{:.2f}'.format)
                     self._ppt.update_table(f'app{app_no}_doc_table',doc_df,include_index=False,background='RGB')
                     
+
+
+                   
                     loc_df = self._aip_data.get_loc_sizing(app_id)
                     loc = loc_df['Number of Code Lines']
                     self._ppt.replace_loc(loc,app_no)
@@ -272,7 +275,13 @@ class GeneratePPT(Logger):
                         iso_df.loc[iso_df['violation']!='','background']='255,255,255'
                         self._ppt.update_table(f'app{app_no}_iso5055',iso_df,
                                             include_index=False,background='background')
-
+                                       
+                    pourcentage_iso5055 = iso_df["count"].sum()
+                    
+                    iso_Maintainaility = iso_df[iso_df.category == 'Maintainability' ]
+                    iso_MaintainailityCall = iso_Maintainaility["count"].sum()
+                    self._ppt.replace_text(f'{{app{app_no}_ISO_5055}}', round((iso_MaintainailityCall/(pourcentage_iso5055/2))*100,1))
+                    
             #replaceHighlight application specific data
             if self._config.hl_active and self._hl_data.has_data(hl_id):
                 (oss_crit,oss_high,oss_med,lic,components) = self.oss_risk_assessment(hl_id,app_no,day_rate)
@@ -502,6 +511,9 @@ class GeneratePPT(Logger):
             rule_summary_df=rule_summary_df.head(5)
             self._ppt.update_table(f'app{app_no}_top_violations',rule_summary_df,include_index=False)
 
+            #pourcentage_iso5055 = critical_rule_df['name']
+            #self._ppt.replace_text(f'{{app{app_no}_ISO_5055}}',rule_summary_df)
+
     def fill_violations(self,app_id,app_no):
         violation_df = pd.DataFrame(self._aip_data.violation_sizing(app_id),index=[0])
         violation_df['Violation Count']=pd.Series(["{0:,.0f}".format(val) for val in violation_df['Violation Count']])
@@ -512,6 +524,18 @@ class GeneratePPT(Logger):
         self._ppt.update_table(f'app{app_no}_violation_sizing',violation_df.transpose())
         self._ppt.replace_text(f'{{app{app_no}_critical_violations}}',violation_df['Violation Count'].loc[0])
 
+        #violation_df['Security']=pd.Series(["{0:,.0f}".format(val) for val in violation_df['Security']])
+        
+        #print('#########################################################################################')
+        #print('coucou le resultat est',violation_df['Security'])
+        #print('#########################################################################################')
+        ######################################################################
+
+        ##code added for is 5055
+        #pourcentage_iso5055 = violation_df[' per file'].sum()
+        #self._ppt.replace_text(f'{{app{app_no}_ISO_5055}}',violation_df['Violation Count'].sum())
+        ######################################################################################
+        
 
     def fill_sizing(self,app_id,app_no):
         sizing_df = pd.DataFrame(self._aip_data.tech_sizing(app_id),index=[0])
