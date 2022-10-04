@@ -1,6 +1,6 @@
 from distutils.command.config import config
 from logging import DEBUG, info, warn
-from pandas.core.frame import DataFrame
+from pandas import DataFrame
 from restCall import AipRestCall, AipData, HLRestCall, HLData
 from pptx import Presentation
 from powerpoint import PowerPoint
@@ -629,7 +629,7 @@ if __name__ == '__main__':
     print('Copyright (c) 2022 CAST Software Inc.\n')
     print('If you need assistance, please contact Nevin Kaplan (NKA) from the CAST US PS team\n')
 
-    parser = argparse.ArgumentParser(description='Assessment Deck Generation Tool')
+    parser = argparse.ArgumentParser(description='Assessment Report Generation Tool')
     parser.add_argument('-c','--config', required=True, help='Configuration properties file')
     args = parser.parse_args()
     ppt = GeneratePPT(Config(args.config))

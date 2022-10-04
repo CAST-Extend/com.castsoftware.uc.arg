@@ -418,6 +418,11 @@ class HLData(HLRestCall):
                     self._data[s]['lic_high_tot']=0
                     self._data[s]['lic_med_tot']=0
                 else:
+                    # make some adjustment since HL data has changed
+                    lic['compliance']=lic['compliance'].str.replace('compliant','high')
+                    lic['compliance']=lic['compliance'].str.replace('partial','medium')
+                    lic['compliance']=lic['compliance'].str.replace('notCompliant','low')
+
                     self._data[s]['lic_high_tot']=len(lic[lic['compliance']=='low']['component'].unique())
                     self._data[s]['lic_med_tot']=len(lic[lic['compliance']=='medium']['component'].unique())
 
