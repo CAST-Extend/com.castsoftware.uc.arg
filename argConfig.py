@@ -11,10 +11,10 @@ __author__ = "Nevin Kaplan"
 __copyright__ = "Copyright 2022, CAST Software"
 __email__ = "n.kaplan@castsoftware.com"
 
-class Config():
+class ARGConfig():
     log = None
     log_translate = {} 
-    def __init__(self, config):
+    def __init__(self, config:str):
         #super().__init__("Config")
 
         self.log_translate['info']=INFO
@@ -201,6 +201,6 @@ parser = ArgumentParser(description='CAST Assessment Report Generation (ARG)')
 parser.add_argument('-c','--config', required=True, help='Configuration properties file')
 args = parser.parse_args()
 
-c = Config(args.config)
+c = ARGConfig(args.config)
 print (f'app 1: {c.aip_app(0)}')
 """
