@@ -9,9 +9,12 @@ from pptx.dml.color import RGBColor
 from actionPlan import ActionPlan
 from logger import Logger
 from IPython.display import display
-from config import Config
+from argConfig import ARGConfig
 from util import find_nth, no_dups
 from stats import OssStats,AIPStats,LicenseStats
+
+from os import getcwd
+from os.path import abspath,dirname,exists
 
 import pandas as pd
 import numpy as np 
@@ -35,7 +38,7 @@ class GeneratePPT(Logger):
     _hl_apps_df = pd.DataFrame()
     _hl_app_list = []
 
-    def __init__(self, config):
+    def __init__(self, config:ARGConfig):
         super().__init__("generate",config.logging_generate)
         self._config = config
 
@@ -319,7 +322,7 @@ class GeneratePPT(Logger):
                     writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
                     col_widths=[50,10,10,10,10,10,10]
                     cloud_tab = util.format_table(writer,cloud,'Cloud Data',col_widths)
-                    writer.save()
+                    writer.close()
                 except Exception as e:
                     self.error(f'unknown error while processing cloud ready data: {str(e)}')
 
@@ -405,7 +408,7 @@ class GeneratePPT(Logger):
 
             self._ppt.copy_block(f'app{app_no}_each_risk_factor',["_risk_name","_risk_grade"],len(risk_grades.count(axis=1)))
             f=1
-            for index, row in risk_grades.T.iteritems():
+            for index, row in risk_grades.T.items():
                 rpl_str = f'{{app{app_no}_risk_name{f}}}'
                 self._ppt.replace_text(rpl_str,index)
                 self.debug(f'replaced {rpl_str} with {index}')
@@ -431,7 +434,7 @@ class GeneratePPT(Logger):
 
     def fill_aip_grades(self,aip_data, app_id, app_no):
         app_level_grades = aip_data.get_app_grades(app_id)
-        for name, value in app_level_grades.T.iteritems():
+        for name, value in app_level_grades.T.items():
             # fill grades
             grade = round(value,2)
             rpl_str = f'{{app{app_no}_grade_{name}}}'
@@ -487,16 +490,18 @@ class GeneratePPT(Logger):
         writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
         col_widths=[50,50,10,10,10]
         cloud_tab = util.format_table(writer,imp_df,'Health Data',col_widths)
-        writer.save()
+        writer.close()
 
         imp_df.drop(columns=['Detail'],inplace=True)
         imp_df['RGB'] = np.where(imp_df.Score >= 3,'194,236,213',\
             np.where(imp_df.Score < 2,'255,210,210','255,240,194'))
         imp_df.Score = imp_df.Score.map('{:.2f}'.format)
 
+        cause_name = abspath(f'{dirname(__file__)}/cause.json')
         imp_df['Cause']=''
-        with open(self._config.cause) as json_file:
+        with open(cause_name) as json_file:
             tech_data = json.load(json_file)
+            json_file.close()
         imp_df['Cause']=imp_df['Key'].map(tech_data)
 
         imp_df = imp_df[['Rule','Score','Cause','Failed','RGB']]
@@ -632,7 +637,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Assessment Report Generation Tool')
     parser.add_argument('-c','--config', required=True, help='Configuration properties file')
     args = parser.parse_args()
-    ppt = GeneratePPT(Config(args.config))
+    ppt = GeneratePPT(ARGConfig(args.config))
     ppt.save_ppt()
 
 

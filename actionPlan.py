@@ -1,6 +1,10 @@
 from stats import AIPStats
 from logging import INFO
 from logger import Logger
+from aipRestCall import AipRestCall
+from os import getcwd
+from os.path import abspath,dirname,exists
+
 
 import math
 import util
@@ -13,7 +17,7 @@ import pandas as pd
     This class is used to collect action plan information and add them to the 
     the proper tags
 """
-class ActionPlan:
+class ActionPlan(AipRestCall):
     _app_list = []
     _ppt = None
     _aip_data = None
@@ -25,7 +29,11 @@ class ActionPlan:
         self._output_folder=output_folder
         self._ppt = ppt
         self._aip_data=aip_data
-        self._effort_df = pd.read_csv('./Effort.csv')
+
+        ef_name = abspath(f'{dirname(__file__)}/Effort.csv')
+        if not exists(ef_name):
+            raise RuntimeError(f'Required file not found: {ef_name}')
+        self._effort_df = pd.read_csv(ef_name)
 
         self._day_rate = day_rate
         self._fix_now = AIPStats(day_rate)
@@ -61,7 +69,7 @@ class ActionPlan:
             summary_tab = util.format_table(writer,ap_summary_df[['Quality Rule','Business Criteria','No. of Actions','comment']],'Summary',col_widths)
             col_widths=[10,50,50,30,30,30,30,30,30,30,30,30,30]
             util.format_table(writer,ap_df,'Action Plan',col_widths)
-            writer.save()
+            writer.close()
 
             #fill action plan related tags
             self._fix_now = self.calc_action_plan_effort(ap_summary_df,app_no,'extreme','security')
