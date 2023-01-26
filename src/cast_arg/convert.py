@@ -1,28 +1,27 @@
-from distutils.command.config import config
-from logging import DEBUG, info, warn
-from pandas import DataFrame
-from restCall import AipRestCall, AipData, HLRestCall, HLData
-from pptx import Presentation
-from powerpoint import PowerPoint
-#from jproperties import Properties 
-from pptx.dml.color import RGBColor
-from actionPlan import ActionPlan
-from logger import Logger
-from IPython.display import display
-from argConfig import ARGConfig
-from util import find_nth, no_dups
-from stats import OssStats,AIPStats,LicenseStats
+from cast_arg.restCall import AipData,HLData
+from cast_arg.powerpoint import PowerPoint
+from cast_arg.actionPlan import ActionPlan
+from cast_arg.config import Config
+from cast_arg.stats import OssStats,AIPStats,LicenseStats
+from cast_common.logger import Logger,DEBUG, INFO, WARN
+from cast_common.util import find_nth, no_dups, list_to_text,format_table
 
+from pandas import DataFrame
+from pptx import Presentation
+from pptx.dml.color import RGBColor
+from IPython.display import display
 from os import getcwd
 from os.path import abspath,dirname,exists
 
 import pandas as pd
 import numpy as np 
-import util 
 import math
-import argparse
 import json
 import datetime
+
+__author__ = "Nevin Kaplan"
+__email__ = "n.kaplan@castsoftware.com"
+__copyright__ = "Copyright 2022, CAST Software"
 
 class GeneratePPT(Logger):
     _ppt = None
@@ -38,7 +37,7 @@ class GeneratePPT(Logger):
     _hl_apps_df = pd.DataFrame()
     _hl_app_list = []
 
-    def __init__(self, config:ARGConfig):
+    def __init__(self, config:Config):
         super().__init__("generate",config.logging_generate)
         self._config = config
 
@@ -104,7 +103,7 @@ class GeneratePPT(Logger):
             risk_grades = self._aip_data.calc_health_grades_high_risk(all_apps_avg_grade)
             if risk_grades.empty:
                 risk_grades = self._aip_data.calc_health_grades_medium_risk(all_apps_avg_grade)
-            self._ppt.replace_text("{summary_at_risk_factors}",util.list_to_text(risk_grades.index.tolist()).lower())
+            self._ppt.replace_text("{summary_at_risk_factors}",list_to_text(risk_grades.index.tolist()).lower())
         
             if risk_grades.empty:
                 self._ppt.replace_block('{immediate_action}','{end_immediate_action}','')
@@ -148,14 +147,17 @@ class GeneratePPT(Logger):
 
             if self._config.aip_active:
                 if self._aip_data.has_data(app_id):
+                    self.info('Preparing AIP Data')
                     #self.info(f'Working on {app_id} ({self._appl_title[app_id]})')
 
+                    self.info('Filling risk factors for the executive summary page')
                     # do risk factors for the executive summary page
                     self.fill_aip_grades(self._aip_data,app_id, app_no)
                     risk_grades = self.each_risk_factor(self._aip_data,app_id, app_no)
-                    self._ppt.replace_text(f'{{app{app_no}_high_risk_grade_names}}',util.list_to_text(risk_grades.index.values))
+                    self._ppt.replace_text(f'{{app{app_no}_high_risk_grade_names}}',list_to_text(risk_grades.index.values))
 
 
+                    self.info('Filling Technical details TABLE')
                     # Technical Overview - Technical details TABLE
                     grade_all = self._aip_data.get_app_grades(app_id)
                     #self._ppt.replace_risk_factor(grade_all,app_no)
@@ -166,23 +168,23 @@ class GeneratePPT(Logger):
                     #add appmarq technology
                     self._ppt.replace_text(f'{{app{app_no}_largest_tech}}',grade_by_tech_df.index[0])
 
+                    self.info('Filling Technical Overview')
                     # Technical Overview - Lines of code by technology GRAPH
                     self._ppt.update_chart(f'app{app_no}_sizing_pie_chart',grade_by_tech_df['LOC'])
 
                     snapshot = self._aip_data.snapshot(app=app_id)
                     # app_name = snapshot['name']
                     # self._ppt.replace_text(f'{{app{app_no}_name}}',app_name)
-                    self._ppt.replace_text(f'{{app{app_no}_all_technogies}}',util.list_to_text(snapshot['technology']))
+                    self._ppt.replace_text(f'{{app{app_no}_all_technogies}}',list_to_text(snapshot['technology']))
 
                     #calculate high and medium risk factors
                     risk_grades = self._aip_data.calc_health_grades_high_risk(grade_all)
                     if risk_grades.empty:
                         risk_grades = self._aip_data.calc_health_grades_medium_risk(grade_all)
-                    self._ppt.replace_text(f'{{app{app_no}_at_risk_grade_names}}',util.list_to_text(risk_grades.index.tolist()).lower())
+                    self._ppt.replace_text(f'{{app{app_no}_at_risk_grade_names}}',list_to_text(risk_grades.index.tolist()).lower())
 
                     self.fill_strengh_improvement_tbl(app_id,app_no)
                     
-
                     """
                         Populate the document insites page
                         The necessary data is found in the loc_tbl
@@ -287,6 +289,7 @@ class GeneratePPT(Logger):
                     
             #replaceHighlight application specific data
             if self._config.hl_active and self._hl_data.has_data(hl_id):
+                self.info('Preparing AIP and HL Data')
                 (oss_crit,oss_high,oss_med,lic,components) = self.oss_risk_assessment(hl_id,app_no,day_rate)
                 # fix_now_total.add_effort(oss_crit.effort)
                 # fix_now_total.add_violations(oss_crit.violations)
@@ -321,7 +324,7 @@ class GeneratePPT(Logger):
                     file_name = f'{self._config.output}/cloud-{self._config.title_list[idx]}.xlsx'
                     writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
                     col_widths=[50,10,10,10,10,10,10]
-                    cloud_tab = util.format_table(writer,cloud,'Cloud Data',col_widths)
+                    cloud_tab = format_table(writer,cloud,'Cloud Data',col_widths)
                     writer.close()
                 except Exception as e:
                     self.error(f'unknown error while processing cloud ready data: {str(e)}')
@@ -433,6 +436,7 @@ class GeneratePPT(Logger):
         return rgb
 
     def fill_aip_grades(self,aip_data, app_id, app_no):
+        self.info('Filling AIP grades data')
         app_level_grades = aip_data.get_app_grades(app_id)
         for name, value in app_level_grades.T.items():
             # fill grades
@@ -478,6 +482,7 @@ class GeneratePPT(Logger):
 
 
     def fill_strengh_improvement_tbl(self,app_id,app_no):
+        self.info('Filling strength and improvment table')
         """
             Populate the strengths and improvement page
             The necessary data is found in the loc_tbl
@@ -489,7 +494,7 @@ class GeneratePPT(Logger):
         file_name = f'{self._config.output}/health-{self._config.title_list[app_no-1]}.xlsx'
         writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
         col_widths=[50,50,10,10,10]
-        cloud_tab = util.format_table(writer,imp_df,'Health Data',col_widths)
+        cloud_tab = format_table(writer,imp_df,'Health Data',col_widths)
         writer.close()
 
         imp_df.drop(columns=['Detail'],inplace=True)
@@ -508,6 +513,7 @@ class GeneratePPT(Logger):
         self._ppt.update_table(f'app{app_no}_imp_table',imp_df,include_index=False,background='RGB')
 
     def fill_critical_rules(self,app_id,app_no):
+        self.info('Filling critical rules table')
         rules_df = self._aip_data.critical_rules(app_id)
         if not rules_df.empty:
             critical_rule_df = pd.json_normalize(rules_df['rulePattern'])
@@ -520,6 +526,7 @@ class GeneratePPT(Logger):
             #self._ppt.replace_text(f'{{app{app_no}_ISO_5055}}',rule_summary_df)
 
     def fill_violations(self,app_id,app_no):
+        self.info('Filling violation table')
         violation_df = pd.DataFrame(self._aip_data.violation_sizing(app_id),index=[0])
         violation_df['Violation Count']=pd.Series(["{0:,.0f}".format(val) for val in violation_df['Violation Count']])
         violation_df[' per file']=pd.Series(["{0:,.2f}".format(val) for val in violation_df[' per file']])
@@ -543,6 +550,7 @@ class GeneratePPT(Logger):
         
 
     def fill_sizing(self,app_id,app_no):
+        self.info('Filling sizing table')
         sizing_df = pd.DataFrame(self._aip_data.tech_sizing(app_id),index=[0])
         sizing_df['LoC']=pd.Series(["{0:,.0f} K".format(val / 1000) for val in sizing_df['LoC']])
         sizing_df['Files']=pd.Series(["{0:,.0f}".format(val) for val in sizing_df['Files']])
@@ -553,6 +561,7 @@ class GeneratePPT(Logger):
         self._ppt.update_table(f'app{app_no}_tech_sizing',sizing_df)
 
     def oss_risk_assessment(self,hl_id,app_no,day_rate):
+        self.info('Filling OSS risk assessment table')
         lic_df=self._hl_data.get_lic_info(hl_id)
         lic_df=self._hl_data.sort_lic_info(lic_df)
         oss_df=self._hl_data.get_cve_info(hl_id)
@@ -577,6 +586,7 @@ class GeneratePPT(Logger):
         if not oss_df.empty:
             self._ppt.update_table(f'app{app_no}_HL_table_CVEs',oss_df,include_index=False)
 
+        self.info('Filling OSS license table')
         '''
             License compliance table
         
@@ -629,15 +639,5 @@ class GeneratePPT(Logger):
 
 
 
-if __name__ == '__main__':
-    print('\nCAST Assessment Deck Generation Tool')
-    print('Copyright (c) 2022 CAST Software Inc.\n')
-    print('If you need assistance, please contact Nevin Kaplan (NKA) from the CAST US PS team\n')
-
-    parser = argparse.ArgumentParser(description='Assessment Report Generation Tool')
-    parser.add_argument('-c','--config', required=True, help='Configuration properties file')
-    args = parser.parse_args()
-    ppt = GeneratePPT(ARGConfig(args.config))
-    ppt.save_ppt()
 
 

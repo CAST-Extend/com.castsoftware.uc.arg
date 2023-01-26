@@ -1,16 +1,10 @@
-
 """
     Open Source Safty Statistical Information
 """
-
-from distutils.log import INFO
-from logging import DEBUG, info, warn, error
-
 from pandas import DataFrame, concat
-from logger import Logger
-
+from cast_common.logger import Logger,INFO
+from cast_common.util import list_to_text,rreplace
 import math
-import util
 
 __author__ = "Nevin Kaplan"
 __copyright__ = "Copyright 2022, CAST Software"
@@ -90,12 +84,12 @@ class AIPStats():
                 if len(rule) == 0:
                     rule = criteria
                 text = f'{text}{total} {cases} {rule}, '
-            return util.rreplace(text[:-2],', ',' and ')
+            return rreplace(text[:-2],', ',' and ')
         except (KeyError):
             return ""
 
     def replace_text(self,ppt,app_no,priority):
-        bus_txt = util.list_to_text(self.business_criteria(self.data)) + ' '
+        bus_txt = list_to_text(self.business_criteria(self.data)) + ' '
         vio_txt = self.list_violations(self.data)
         base_txt = f'app{app_no}_aip_{priority}'
         msg = f'Replacing {base_txt} (_eff={self.effort}, _cost={self.cost}, _vio_cnt={self.violations}'

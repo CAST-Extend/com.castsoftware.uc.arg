@@ -1,8 +1,7 @@
 """
     Read and validate configuration file
 """
-from logging import DEBUG, INFO, WARN, ERROR, info, warn, error
-from logger import Logger
+from cast_common.logger import Logger,DEBUG, INFO, WARN, ERROR
 from json import load
 from argparse import ArgumentParser
 from json import JSONDecodeError
@@ -11,7 +10,7 @@ __author__ = "Nevin Kaplan"
 __copyright__ = "Copyright 2022, CAST Software"
 __email__ = "n.kaplan@castsoftware.com"
 
-class ARGConfig():
+class Config():
     log = None
     log_translate = {} 
     def __init__(self, config:str):
