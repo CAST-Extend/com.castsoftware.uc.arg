@@ -4,6 +4,7 @@ from cast_common.aipRestCall import AipRestCall
 from cast_common.util import format_table,list_to_text
 from os import getcwd
 from os.path import abspath,dirname,exists
+from site import getsitepackages
 
 
 import math
@@ -30,7 +31,9 @@ class ActionPlan(AipRestCall):
         self._ppt = ppt
         self._aip_data=aip_data
 
-        ef_name = abspath(f'{dirname(__file__)}/Effort.csv')
+        #ef_name = abspath(f'{dirname(__file__)}/Effort.csv')
+        ef_name = abspath(f'{getsitepackages()[-1]}/cast_arg/Effort.csv')
+
         if not exists(ef_name):
             raise RuntimeError(f'Required file not found: {ef_name}')
         self._effort_df = pd.read_csv(ef_name)

@@ -12,6 +12,7 @@ from pptx.dml.color import RGBColor
 from IPython.display import display
 from os import getcwd
 from os.path import abspath,dirname,exists
+from site import getsitepackages
 
 import pandas as pd
 import numpy as np 
@@ -289,7 +290,6 @@ class GeneratePPT(Logger):
                     
             #replaceHighlight application specific data
             if self._config.hl_active and self._hl_data.has_data(hl_id):
-                self.info('Preparing AIP and HL Data')
                 (oss_crit,oss_high,oss_med,lic,components) = self.oss_risk_assessment(hl_id,app_no,day_rate)
                 # fix_now_total.add_effort(oss_crit.effort)
                 # fix_now_total.add_violations(oss_crit.violations)
@@ -502,11 +502,12 @@ class GeneratePPT(Logger):
             np.where(imp_df.Score < 2,'255,210,210','255,240,194'))
         imp_df.Score = imp_df.Score.map('{:.2f}'.format)
 
-        cause_name = abspath(f'{dirname(__file__)}/cause.json')
+        #cause_name = abspath(f'{dirname(__file__)}/cause.json')
+
+        cause_name = abspath(f'{getsitepackages()[-1]}/cast_arg/cause.json')
         imp_df['Cause']=''
         with open(cause_name) as json_file:
             tech_data = json.load(json_file)
-            json_file.close()
         imp_df['Cause']=imp_df['Key'].map(tech_data)
 
         imp_df = imp_df[['Rule','Score','Cause','Failed','RGB']]
