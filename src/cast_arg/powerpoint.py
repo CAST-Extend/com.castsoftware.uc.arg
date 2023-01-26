@@ -8,17 +8,17 @@ from pptx.dml.color import ColorFormat, RGBColor
 from pptx.enum.dml import MSO_THEME_COLOR
 from pptx.table import _Cell,Table, _Row, _Column
 
-from logger import Logger
-from logging import INFO, error
-
-import util
+from cast_common.logger import Logger,INFO,ERROR
+import cast_common.util
 
 from copy import deepcopy
 import six
 import pandas as pd
 import logging
 
-
+__author__ = "Nevin Kaplan"
+__email__ = "n.kaplan@castsoftware.com"
+__copyright__ = "Copyright 2022, CAST Software"
 
 class PowerPoint (Logger):
     _input = None

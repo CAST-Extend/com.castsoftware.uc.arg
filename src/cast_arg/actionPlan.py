@@ -1,17 +1,17 @@
-from stats import AIPStats
-from logging import INFO
-from logger import Logger
-from aipRestCall import AipRestCall
+from cast_arg.stats import AIPStats
+from cast_common.logger import Logger,INFO
+from cast_common.aipRestCall import AipRestCall
+from cast_common.util import format_table,list_to_text
 from os import getcwd
 from os.path import abspath,dirname,exists
 
 
 import math
-import util
 import pandas as pd
 
-
-
+__author__ = "Nevin Kaplan"
+__email__ = "n.kaplan@castsoftware.com"
+__copyright__ = "Copyright 2022, CAST Software"
 
 """
     This class is used to collect action plan information and add them to the 
@@ -66,28 +66,28 @@ class ActionPlan(AipRestCall):
             file_name = f'{self._output_folder}/{app_id}_action_plan.xlsx'
             writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
             col_widths=[50,40,10,10,10,50,10,10,10]
-            summary_tab = util.format_table(writer,ap_summary_df[['Quality Rule','Business Criteria','No. of Actions','comment']],'Summary',col_widths)
+            summary_tab = format_table(writer,ap_summary_df[['Quality Rule','Business Criteria','No. of Actions','comment']],'Summary',col_widths)
             col_widths=[10,50,50,30,30,30,30,30,30,30,30,30,30]
-            util.format_table(writer,ap_df,'Action Plan',col_widths)
+            format_table(writer,ap_df,'Action Plan',col_widths)
             writer.close()
 
             #fill action plan related tags
-            self._fix_now = self.calc_action_plan_effort(ap_summary_df,app_no,'extreme','security')
-            self._high = self.calc_action_plan_effort(ap_summary_df,app_no,'high')
-            self._med = self.calc_action_plan_effort(ap_summary_df,app_no,'moderate')
-            self._low = self.calc_action_plan_effort(ap_summary_df,app_no,'low')
+            self._fix_now = self.calc_action_plan_effort(ap_summary_df,app_no,'Extreme','security')
+            self._high = self.calc_action_plan_effort(ap_summary_df,app_no,'High')
+            self._med = self.calc_action_plan_effort(ap_summary_df,app_no,'Moderate')
+            self._low = self.calc_action_plan_effort(ap_summary_df,app_no,'Low')
             
 
             #configure action plan table background colors 
-            ap_summary_df.loc[ap_summary_df['tag']=='extreme','RGB']='244,212,212'
-            ap_summary_df.loc[ap_summary_df['tag']=='high','RGB']='255,229,194'
-            ap_summary_df.loc[ap_summary_df['tag']=='moderate','RGB']='203,225,238'
-            ap_summary_df.loc[ap_summary_df['tag']=='low','RGB']='254,254,255'
+            ap_summary_df.loc[ap_summary_df['tag']=='Extreme','RGB']='244,212,212'
+            ap_summary_df.loc[ap_summary_df['tag']=='High','RGB']='255,229,194'
+            ap_summary_df.loc[ap_summary_df['tag']=='Moderate','RGB']='203,225,238'
+            ap_summary_df.loc[ap_summary_df['tag']=='Low','RGB']='254,254,255'
 
-            ap_table = pd.concat([ap_summary_df[ap_summary_df['tag']=='extreme'],
-                                  ap_summary_df[ap_summary_df['tag']=='high'],
-                                  ap_summary_df[ap_summary_df['tag']=='moderate'],
-                                  ap_summary_df[ap_summary_df['tag']=='low']])
+            ap_table = pd.concat([ap_summary_df[ap_summary_df['tag']=='Extreme'],
+                                  ap_summary_df[ap_summary_df['tag']=='High'],
+                                  ap_summary_df[ap_summary_df['tag']=='Moderate'],
+                                  ap_summary_df[ap_summary_df['tag']=='Low']])
 
             ap_table = ap_table.drop(columns=['comment','tag','Technical Criteria','Days Effort','Cost Est.','Eff Hours'])
 
@@ -139,7 +139,7 @@ class ActionPlan(AipRestCall):
         if not list:
             list.append(default)
 
-        return util.list_to_text(list),sum_txt, filtered
+        return list_to_text(list),sum_txt, filtered
 
     def business_criteria(self,filtered):
         list = []

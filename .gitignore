@@ -1,4 +1,7 @@
 *.xlsx
 **/deck/**
 **/__pycache__/**
+**/.venv/**
 .vscode/launch.json
+pkgs.zip
+*.save
