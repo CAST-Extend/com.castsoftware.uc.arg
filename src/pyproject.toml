@@ -2,7 +2,8 @@
 name='com.castsoftware.uc.arg'
 description="Assessment Report Generator (ARG)"
 #version='0.1.0' #prod version
-version='1.5.1' #test version
+version='1.5.2' #test version
+dependencies = ['pandas', 'python-pptx==0.6.18', 'com.castsoftware.uc.python.common>=0.1.6', 'IPython', 'requests', 'Jinja2']
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
