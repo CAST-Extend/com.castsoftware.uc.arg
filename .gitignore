@@ -2,6 +2,11 @@
 **/deck/**
 **/__pycache__/**
 **/.venv/**
-.vscode/launch.json
-pkgs.zip
+**/build/**
+**/.vscode/**
+**/com.castsoftware.uc.arg.egg-info/**
+com.castsoftware.uc.arg.code-workspace
 *.save
+*.ipynb
+*.pptx
+pip*.bat

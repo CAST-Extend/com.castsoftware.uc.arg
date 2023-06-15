@@ -127,6 +127,12 @@ class GeneratePPT(Logger):
         lic_summary = LicenseStats(logger_level=self._config.logging_generate)
         summary_components = 0
 
+        pages = [
+            
+
+        ]
+
+
         for idx in range(0,app_cnt):
             # create instance of action plan class 
             self.ap = ActionPlan (app_list,self._aip_data,self._ppt,self._config.output,day_rate)
@@ -143,7 +149,7 @@ class GeneratePPT(Logger):
             app_id = app_list[idx]
             hl_id = hl_list[idx]
             app_title = self._config.title_list[idx]
-            self.info(f'Working on pages for {app_title}')
+            self.info(f'********************* Working on pages for {app_title} ******************************')
             self._ppt.replace_text(f'{{app{app_no}_name}}',app_title)
 
             if self._config.aip_active:
@@ -165,13 +171,14 @@ class GeneratePPT(Logger):
                     grade_by_tech_df = self._aip_data.get_grade_by_tech(app_id)
                     grades = grade_by_tech_df.drop(['Documentation',"ISO","ISO_EFF","ISO_MAINT","ISO_REL","ISO_SEC"],axis=1)
                     self._ppt.update_table(f'app{app_no}_grade_by_tech_table',grades)
-                    
-                    #add appmarq technology
-                    self._ppt.replace_text(f'{{app{app_no}_largest_tech}}',grade_by_tech_df.index[0])
 
-                    self.info('Filling Technical Overview')
-                    # Technical Overview - Lines of code by technology GRAPH
-                    self._ppt.update_chart(f'app{app_no}_sizing_pie_chart',grade_by_tech_df['LOC'])
+                    if not grade_by_tech_df.empty:
+                        #add appmarq technology
+                        self._ppt.replace_text(f'{{app{app_no}_largest_tech}}',grade_by_tech_df.index[0])
+
+                        self.info('Filling Technical Overview')
+                        # Technical Overview - Lines of code by technology GRAPH
+                        self._ppt.update_chart(f'app{app_no}_sizing_pie_chart',grade_by_tech_df['LOC'])
 
                     snapshot = self._aip_data.snapshot(app=app_id)
                     # app_name = snapshot['name']
@@ -207,38 +214,40 @@ class GeneratePPT(Logger):
 
                    
                     loc_df = self._aip_data.get_loc_sizing(app_id)
-                    loc = loc_df['Number of Code Lines']
-                    self._ppt.replace_loc(loc,app_no)
+                    if len(loc_df) > 0:
+                        loc = loc_df['Number of Code Lines']
+                        self._ppt.replace_loc(loc,app_no)
 
-                    loc_tbl = pd.DataFrame.from_dict(data=self._aip_data.get_loc_sizing(app_id),orient='index').drop('Critical Violations')
-                    loc_tbl = loc_tbl.rename(columns={0:'loc'})
-                    loc_tbl['percent'] = round((loc_tbl['loc'] / loc_tbl['loc'].sum()) * 100,2)
-                    loc_tbl['loc']=pd.Series(["{0:,.0f}".format(val) for val in loc_tbl['loc']], index = loc_tbl.index)
+                        loc_tbl = pd.DataFrame.from_dict(data=self._aip_data.get_loc_sizing(app_id),orient='index').drop('Critical Violations')
+                        loc_tbl = loc_tbl.rename(columns={0:'loc'})
+                        loc_tbl['percent'] = round((loc_tbl['loc'] / loc_tbl['loc'].sum()) * 100,2)
+                        loc_tbl['loc']=pd.Series(["{0:,.0f}".format(val) for val in loc_tbl['loc']], index = loc_tbl.index)
 
-                    percent_comment = loc_tbl.loc['Number of Comment Lines','percent']
-                    percent_comment_out = loc_tbl.loc['Number of Commented-out Code Lines','percent']
+                        percent_comment = loc_tbl.loc['Number of Comment Lines','percent']
+                        percent_comment_out = loc_tbl.loc['Number of Commented-out Code Lines','percent']
 
-                    if percent_comment < 15:
-                        comment_level='low'
-                    elif percent_comment > 15 and percent_comment <= 20:
-                        comment_level='good'
-                    else:
-                        comment_level='high'
+                        if percent_comment < 15:
+                            comment_level='low'
+                        elif percent_comment > 15 and percent_comment <= 20:
+                            comment_level='good'
+                        else:
+                            comment_level='high'
                     
-                    self._ppt.replace_text(f'{{app{app_no}_comment_hl}}',comment_level)
-                    self._ppt.replace_text(f'{{app{app_no}_comment_level}}',comment_level)
-                    self._ppt.replace_text(f'{{app{app_no}_comment_pct}}',percent_comment)
-                    self._ppt.replace_text(f'{{app{app_no}_comment_out_pct}}',percent_comment_out)
+                        self._ppt.replace_text(f'{{app{app_no}_comment_hl}}',comment_level)
+                        self._ppt.replace_text(f'{{app{app_no}_comment_level}}',comment_level)
+                        self._ppt.replace_text(f'{{app{app_no}_comment_pct}}',percent_comment)
+                        self._ppt.replace_text(f'{{app{app_no}_comment_out_pct}}',percent_comment_out)
 
-                    loc_tbl['percent']=pd.Series(["{0:.2f}%".format(val) for val in loc_tbl['percent']], index = loc_tbl.index)
-                    self._ppt.update_table(f'app{app_no}_loc_table',loc_tbl,has_header=False)
-                    self._ppt.update_chart(f'app{app_no}_loc_pie_chart',loc_tbl['loc'])
+                        loc_tbl['percent']=pd.Series(["{0:.2f}%".format(val) for val in loc_tbl['percent']], index = loc_tbl.index)
+                        self._ppt.update_table(f'app{app_no}_loc_table',loc_tbl,has_header=False)
+                        self._ppt.update_chart(f'app{app_no}_loc_pie_chart',loc_tbl['loc'])
 
-                    # self._ppt.replace_grade(grade_all,app_no)
+                        # self._ppt.replace_grade(grade_all,app_no)
 
-                    self.fill_sizing(app_id,app_no)
+                        self.fill_sizing(app_id,app_no)
+                        self.fill_violations(app_id,app_no)
+    
                     self.fill_critical_rules(app_id,app_no)
-                    self.fill_violations(app_id,app_no)
 
                     """
                         Get Action Plan data and combine it for the various slide combinations
@@ -282,39 +291,42 @@ class GeneratePPT(Logger):
                         self._ppt.update_table(f'app{app_no}_iso5055',iso_df,
                                             include_index=False,background='background')
                                        
-                    pourcentage_iso5055 = iso_df["count"].sum()
-                    
-                    iso_Maintainaility = iso_df[iso_df.category == 'Maintainability' ]
-                    iso_MaintainailityCall = iso_Maintainaility["count"].sum()
-                    self._ppt.replace_text(f'{{app{app_no}_ISO_5055}}', round((iso_MaintainailityCall/(pourcentage_iso5055/2))*100,1))
+                        pourcentage_iso5055 = iso_df["count"].sum()
+                        
+                        iso_Maintainaility = iso_df[iso_df.category == 'Maintainability' ]
+                        iso_MaintainailityCall = iso_Maintainaility["count"].sum()
+                        self._ppt.replace_text(f'{{app{app_no}_ISO_5055}}', round((iso_MaintainailityCall/(pourcentage_iso5055/2))*100,1))
                     
             #replaceHighlight application specific data
             if self._config.hl_active and self._hl_data.has_data(hl_id):
-                (oss_crit,oss_high,oss_med,lic,components) = self.oss_risk_assessment(hl_id,app_no,day_rate)
-                # fix_now_total.add_effort(oss_crit.effort)
-                # fix_now_total.add_violations(oss_crit.violations)
+                try:
+                    (oss_crit,oss_high,oss_med,lic,components) = self.oss_risk_assessment(hl_id,app_no,day_rate)
+                    fix_now_total.add_effort(oss_crit.effort)
+                    fix_now_total.add_violations(oss_crit.violations)
 
-                # near_term_total.add_effort(oss_high.effort)
-                # near_term_total.add_effort(oss_med.effort)
+                    near_term_total.add_effort(oss_high.effort)
+                    near_term_total.add_effort(oss_med.effort)
 
-                hl_near_term_total.add_effort(oss_high.effort)
-                hl_near_term_total.add_effort(oss_med.effort)
-                hl_near_term_total.add_violations(oss_high.violations)
-                hl_near_term_total.add_violations(oss_med.violations)
-                hl_near_term_total.replace_text(self._ppt,app_no,'hl_near_term_total')
+                    hl_near_term_total.add_effort(oss_high.effort)
+                    hl_near_term_total.add_effort(oss_med.effort)
+                    hl_near_term_total.add_violations(oss_high.violations)
+                    hl_near_term_total.add_violations(oss_med.violations)
+                    hl_near_term_total.replace_text(self._ppt,app_no,'hl_near_term_total')
 
-                hl_summary_critical.add_components(oss_crit.components)
-                hl_summary_critical.add_violations(oss_crit.violations)
+                    hl_summary_critical.add_components(oss_crit.components)
+                    hl_summary_critical.add_violations(oss_crit.violations)
 
-                hl_summary_high_near.add_components(oss_high.components)
-                hl_summary_high_near.add_components(oss_med.components)
+                    hl_summary_high_near.add_components(oss_high.components)
+                    hl_summary_high_near.add_components(oss_med.components)
 
-                hl_summary.add_components(components)
+                    hl_summary.add_components(components)
 
-                lic_summary.add_high(lic.high)
-                lic_summary.add_medium(lic.medium)
-                lic_summary.add_low(lic.low)
-
+#                    if not lic.empty:
+                    lic_summary.add_high(lic.high)
+                    lic_summary.add_medium(lic.medium)
+                    lic_summary.add_low(lic.low)
+                except KeyError as ex:
+                    self.warning(f'OSS information not found {str(ex)}')
                 """
                     Cloud ready excel sheet generation
                 """
@@ -516,15 +528,19 @@ class GeneratePPT(Logger):
     def fill_critical_rules(self,app_id,app_no):
         self.info('Filling critical rules table')
         rules_df = self._aip_data.critical_rules(app_id)
-        if not rules_df.empty:
-            critical_rule_df = pd.json_normalize(rules_df['rulePattern'])
-            critical_rule_df = critical_rule_df[['name','critical']]
-            rule_summary_df=critical_rule_df.groupby(['name']).size().reset_index(name='counts').sort_values(by=['counts'],ascending=False)
-            rule_summary_df=rule_summary_df.head(5)
-            self._ppt.update_table(f'app{app_no}_top_violations',rule_summary_df,include_index=False)
 
-            #pourcentage_iso5055 = critical_rule_df['name']
-            #self._ppt.replace_text(f'{{app{app_no}_ISO_5055}}',rule_summary_df)
+#        crit_rule_cols = [col for col in rules_df if col.startswith('rulePattern')]
+        rules_df = rules_df[['rulePattern.name','rulePattern.critical']]
+        rule_summary_df=rules_df.groupby(['rulePattern.name']).size().reset_index(name='counts').sort_values(by=['counts'],ascending=False)
+        rule_summary_df=rule_summary_df.head(5)
+        self._ppt.update_table(f'app{app_no}_top_violations',rule_summary_df,include_index=False)
+
+        # if not rules_df.empty:
+        #     critical_rule_df = pd.json_normalize(rules_df['rulePattern'])
+        #     critical_rule_df = critical_rule_df[['name','critical']]
+
+        #     #pourcentage_iso5055 = critical_rule_df['name']
+        #     #self._ppt.replace_text(f'{{app{app_no}_ISO_5055}}',rule_summary_df)
 
     def fill_violations(self,app_id,app_no):
         self.info('Filling violation table')
@@ -635,7 +651,8 @@ class GeneratePPT(Logger):
                 #     lic_summary[lic_summary['risk']=='Medium']['comp count'].sum())
 
             lic.replace_text(self._ppt,app_no)
-
+        else:
+            lic = DataFrame()
         return (oss_crit,oss_high,oss_med,lic,total_components)
 
 

@@ -100,7 +100,12 @@ class AipData(AipRestCall):
                     self._data[s]['critical_rules']=self.get_rules(domain_id,self._data[s]['snapshot']['id'],60017,non_critical=False)
 
                     self.info('ISO rules')
-                    self._data[s]['ISO']=self.__get_iso_rules(domain_id,snapshot['id'])
+                    self._data[s]['ISO']=self._get_iso_rules(domain_id,snapshot['id'])
+
+                    # self.info('Green IT Index')
+                    # self._data[s]['GreenIT']=self._get_green_rules(domain_id,snapshot['id'])
+
+
 
                     self.info('action plan data')
                     (ap_df,ap_summary_df) = self.get_action_plan(domain_id,self._data[s]['snapshot']['id']) 
@@ -119,7 +124,35 @@ class AipData(AipRestCall):
     def iso_rules(self, app):
         return self._data[app]['ISO']
 
-    def __get_iso_rules(self,domain_id,snapshot_id):
+    def _get_green_it_rules(self,domain_id,snapshot_id):
+        iso={20140522:"Green IT Index"}
+
+        rslt_df = DataFrame()
+        rslt_df.style.set_properties(subset=['text'],**{'text-align': 'left'})
+        for key, value in iso.items():
+            try:
+                temp = DataFrame(columns=['category','violation'])
+                rp = json_normalize(self.get_rules(domain_id,snapshot_id,key)['rulePattern'])
+                temp['violation'] = rp['name']
+                temp['category'] = value
+                temp = temp.groupby(['category','violation']).size().reset_index(name='count') 
+
+                total = temp.groupby(['category'])['count'].sum().reset_index(name='count') 
+                total['violation']=''
+                total = total[['category','violation','count']]
+
+                rslt_df = concat([rslt_df,total,temp])
+            except KeyError as e:
+                self.warning(f'no iso rules for {value} ({e})')
+
+        if 'category' in rslt_df.columns:
+            rslt_df['category'] = rslt_df['category'].mask(rslt_df['category'].ne(rslt_df['category'].shift()).cumsum().duplicated(), '')
+        else:
+            self.warning('No ISO rules found')
+            
+        return rslt_df
+
+    def _get_iso_rules(self,domain_id,snapshot_id):
         iso={1061004:"Security",
              1061003:"Reliabllity",
              1061002:"Performance-Efficiency",
@@ -325,6 +358,7 @@ class AipData(AipRestCall):
         sizing_df = DataFrame(self.sizing(app))
         sizing_df = sizing_df[sizing_df.index.isin(['All'])==False]
         sizing_df = DataFrame(sizing_df["Number of Code Lines"].rename("LOC")).dropna()
+        sizing_df.sort_values(by=['LOC'], ascending=False,inplace=True)
         sizing_df = sizing_df.applymap('{:,.0f}'.format)
         
         tech = sizing_df.join(grade_df) 
@@ -335,7 +369,7 @@ class AipData(AipRestCall):
         sizing_df = sizing_df.applymap('{:,.0f}'.format)
 
         tech = tech.join(sizing_df)
-        tech.sort_values(by='LOC',ascending=False,inplace=True)
+#        tech.sort_values(by='LOC',ascending=False,inplace=True)
 #        tech = tech.applymap('{:,.2f}'.format)
 
         
@@ -394,7 +428,7 @@ class HLData(HLRestCall):
                 self._data[s]['licenses']=lic
                 self._data[s]['cloud']=self.get_cloud_data(app_id)
 
-                if cves.empty:
+                if cves is None:
                     self._data[s]['cve_crit_tot']=0
                     self._data[s]['cve_crit_comp_tot']=0
                     self._data[s]['cve_high_tot']=0
@@ -408,7 +442,8 @@ class HLData(HLRestCall):
                     self._data[s]['cve_high_comp_tot']=len(cves[cves['criticity']=='HIGH']['component'].unique())
                     self._data[s]['cve_med_tot']=len(cves[cves['criticity']=='MEDIUM']['cve'].unique())
                     self._data[s]['cve_med_comp_tot']=len(cves[cves['criticity']=='MEDIUM']['component'].unique())
-                if lic.empty:
+                
+                if lic is None:
                     self._data[s]['lic_high_tot']=0
                     self._data[s]['lic_med_tot']=0
                 else:

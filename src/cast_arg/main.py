@@ -1,6 +1,8 @@
 from argparse import ArgumentParser
-from convert import GeneratePPT
+from cast_arg.convert import GeneratePPT
 from cast_arg.config import Config
+# from convert import GeneratePPT
+# from config import Config
 
 __author__ = "Nevin Kaplan"
 __email__ = "n.kaplan@castsoftware.com"

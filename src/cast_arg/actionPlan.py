@@ -75,22 +75,22 @@ class ActionPlan(AipRestCall):
             writer.close()
 
             #fill action plan related tags
-            self._fix_now = self.calc_action_plan_effort(ap_summary_df,app_no,'Extreme','security')
-            self._high = self.calc_action_plan_effort(ap_summary_df,app_no,'High')
-            self._med = self.calc_action_plan_effort(ap_summary_df,app_no,'Moderate')
-            self._low = self.calc_action_plan_effort(ap_summary_df,app_no,'Low')
+            self._fix_now = self.calc_action_plan_effort(ap_summary_df,app_no,'extreme','security')
+            self._high = self.calc_action_plan_effort(ap_summary_df,app_no,'high')
+            self._med = self.calc_action_plan_effort(ap_summary_df,app_no,'moderate')
+            self._low = self.calc_action_plan_effort(ap_summary_df,app_no,'low')
             
 
             #configure action plan table background colors 
-            ap_summary_df.loc[ap_summary_df['tag']=='Extreme','RGB']='244,212,212'
-            ap_summary_df.loc[ap_summary_df['tag']=='High','RGB']='255,229,194'
-            ap_summary_df.loc[ap_summary_df['tag']=='Moderate','RGB']='203,225,238'
-            ap_summary_df.loc[ap_summary_df['tag']=='Low','RGB']='254,254,255'
+            ap_summary_df.loc[ap_summary_df['tag']=='extreme','RGB']='244,212,212'
+            ap_summary_df.loc[ap_summary_df['tag']=='high','RGB']='255,229,194'
+            ap_summary_df.loc[ap_summary_df['tag']=='moderate','RGB']='203,225,238'
+            ap_summary_df.loc[ap_summary_df['tag']=='low','RGB']='254,254,255'
 
-            ap_table = pd.concat([ap_summary_df[ap_summary_df['tag']=='Extreme'],
-                                  ap_summary_df[ap_summary_df['tag']=='High'],
-                                  ap_summary_df[ap_summary_df['tag']=='Moderate'],
-                                  ap_summary_df[ap_summary_df['tag']=='Low']])
+            ap_table = pd.concat([ap_summary_df[ap_summary_df['tag']=='extreme'],
+                                  ap_summary_df[ap_summary_df['tag']=='high'],
+                                  ap_summary_df[ap_summary_df['tag']=='moderate'],
+                                  ap_summary_df[ap_summary_df['tag']=='low']])
 
             ap_table = ap_table.drop(columns=['comment','tag','Technical Criteria','Days Effort','Cost Est.','Eff Hours'])
 

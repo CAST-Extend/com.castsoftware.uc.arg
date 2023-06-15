@@ -1,15 +1,14 @@
 [project]
 name='com.castsoftware.uc.arg'
 description="Assessment Report Generator (ARG)"
-#version='0.1.0' #prod version
-version='1.5.2' #test version
-dependencies = ['pandas', 'python-pptx==0.6.18', 'com.castsoftware.uc.python.common>=0.1.6', 'IPython', 'requests', 'Jinja2']
+version='1.5.5' #prod version
+dependencies = ['pandas', 'python-pptx==0.6.18', 'com.castsoftware.uc.python.common==1.0.7', 'IPython', 'requests', 'Jinja2']
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: OS Independent",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.6"
 readme = "README.md"
 [project.urls]
 "Homepage" = "https://github.com/CAST-Extend/com.castsoftware.uc.arg"
