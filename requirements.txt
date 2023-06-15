@@ -1,6 +1,0 @@
-jproperties==2.1.0
-python-pptx==0.6.18
-requests==2.24.0
-pandas==1.4.0
-IPython>=7.31.1
-Jinja2==3.1.2
