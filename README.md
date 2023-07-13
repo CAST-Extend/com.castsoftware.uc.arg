@@ -1,23 +1,23 @@
-# Assessment Deck Generation Tool
-The script is used to generate a PowerPoint deck from the provided template. This version includes part of the executive summary, the health and action plan pages.  
+# Assessment Deck Generation Tool (ARG)
+Leveraging the power of CAST MRI and Highlight REST API's, ARG generates a PowerPoint deck in accordance with a designated template.  
 
-## Installation
-* Download and unpack the latest release of the Assessment Deck  Generation Tool from https://github.com/CAST-Extend/com.castsoftware.uc.arg/releases
-   * Source Code (zip) 
-   * com.castsoftware.uc.python.common.zip 
+## First time installation
+1.	Create a folder to install the software, for example c:\ARG.
+2.	In a command prompt, navigate to the recently established folder: c:\ARG.
+3.	Create a virtual environment by running the command: PY -m venv .venv.
+4.	Activate the virtual environment with this command: .\.venv\Scripts\activate.
+5.	Finally, install ARG from the PYPI environment with this command: pip install com.castsoftware.uc.arg.
 
-* Unpack the Source Code zip file (arg)
-* Unpack the com.castsoftware.uc.python.common.zip into a separate folder
-* Install/update required third party packages. 
-    * Open a command prompt
-    * Go to the Source Code folder 
-    * run: pip install -r requrements.txt
-* make sure the <com.castsoftware.uc.python.common>/src folder is included in the PYTHONPATH enviroment variable
+### Upgrade Process
+1.	In a command prompt, navigate to the folder created during installation: c:\ARG.
+2.	Activate the virtual environment with this command: .\.venv\Scripts\activate.
+3.	Finally, install ARG from the PYPI environment with this command: pip install com.castsoftware.uc.arg==<full-version-id> --upgrade
 
 ## Usage
 The script is designed to run on the command line using one parameter, --config, used to identify the project and applications to include in the presentation.
 
-    py convert.py --config config.properties 
+    <ARG install>\.venv\Scripts\activate
+    py -m cast_arg.main --config config.properties 
 
 # Configuration file
 The Assessment Deck Generation Tool is configured using a json formatted file.  The file is divided into three sections, general configuration, application list and rest configuration.  
