@@ -11,7 +11,7 @@ Leveraging the power of CAST MRI and Highlight REST API's, ARG generates a Power
 ### Upgrade Process
 1.	In a command prompt, navigate to the folder created during installation: c:\ARG.
 2.	Activate the virtual environment with this command: .\.venv\Scripts\activate.
-3.	Finally, install ARG from the PYPI environment with this command: pip install com.castsoftware.uc.arg==<full-version-id> --upgrade
+3.	Finally, install ARG from the PYPI environment with this command: pip install com.castsoftware.uc.arg==\<full-version-id> --upgrade
 
 ## Usage
 The script is designed to run on the command line using one parameter, --config, used to identify the project and applications to include in the presentation.
