@@ -1,10 +1,14 @@
 from cast_arg.restCall import AipData,HLData
-from cast_arg.powerpoint import PowerPoint
+#from cast_arg.powerpoint import PowerPoint
 from cast_arg.actionPlan import ActionPlan
 from cast_arg.config import Config
+from cast_arg.pages.greenIt import GreenIt
+
 from cast_arg.stats import OssStats,AIPStats,LicenseStats
 from cast_common.logger import Logger,DEBUG, INFO, WARN
 from cast_common.util import find_nth, no_dups, list_to_text,format_table
+from cast_arg.powerpoint import PowerPoint
+
 
 from pandas import DataFrame
 from pptx import Presentation
@@ -48,11 +52,16 @@ class GeneratePPT(Logger):
         self._ppt = PowerPoint(config.template, out)
 
         # TODO: Handle cases where on HL data is needed and not AIP.
+        self.hl_pages = []
         if config.aip_active:
             self.info("Collecting AIP Data")
             self._aip_data = AipData(config,log_level=config.logging_aip)
         if config.hl_active:
             self.info("Collecting Highlight Data")
+            self.hl_pages = [
+                GreenIt(hl_user=config.hl_user,hl_pswd=config.hl_password,hl_instance=config.hl_instance,
+                        hl_base_url=config.hl_url,log_level=config.logging_highlight)
+            ]
             self._hl_data = HLData(config,log_level=config.logging_highlight)
 
         #project level work
@@ -127,12 +136,6 @@ class GeneratePPT(Logger):
         lic_summary = LicenseStats(logger_level=self._config.logging_generate)
         summary_components = 0
 
-        pages = [
-            
-
-        ]
-
-
         for idx in range(0,app_cnt):
             # create instance of action plan class 
             self.ap = ActionPlan (app_list,self._aip_data,self._ppt,self._config.output,day_rate)
@@ -143,7 +146,6 @@ class GeneratePPT(Logger):
 
             hl_near_term_total=AIPStats(day_rate,logger_level=self._config.logging_generate)
 
-
             # replace application specific AIP data
             app_no = idx+1
             app_id = app_list[idx]
@@ -151,6 +153,10 @@ class GeneratePPT(Logger):
             app_title = self._config.title_list[idx]
             self.info(f'********************* Working on pages for {app_title} ******************************')
             self._ppt.replace_text(f'{{app{app_no}_name}}',app_title)
+
+            if self._config.hl_active:
+                for proc in self.hl_pages:
+                    proc.report(hl_id,app_no,self._ppt,self._config.output)
 
             if self._config.aip_active:
                 if self._aip_data.has_data(app_id):
@@ -178,7 +184,7 @@ class GeneratePPT(Logger):
 
                         self.info('Filling Technical Overview')
                         # Technical Overview - Lines of code by technology GRAPH
-                        self._ppt.update_chart(f'app{app_no}_sizing_pie_chart',grade_by_tech_df['LOC'])
+                        self._ppt.update_chart(f'app{app_no}_sizing_pie_chart',DataFrame(grade_by_tech_df['LOC']))
 
                     snapshot = self._aip_data.snapshot(app=app_id)
                     # app_name = snapshot['name']
@@ -240,7 +246,7 @@ class GeneratePPT(Logger):
 
                         loc_tbl['percent']=pd.Series(["{0:.2f}%".format(val) for val in loc_tbl['percent']], index = loc_tbl.index)
                         self._ppt.update_table(f'app{app_no}_loc_table',loc_tbl,has_header=False)
-                        self._ppt.update_chart(f'app{app_no}_loc_pie_chart',loc_tbl['loc'])
+                        self._ppt.update_chart(f'app{app_no}_loc_pie_chart',DataFrame(loc_tbl['loc']))
 
                         # self._ppt.replace_grade(grade_all,app_no)
 

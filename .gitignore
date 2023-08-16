@@ -10,3 +10,4 @@ com.castsoftware.uc.arg.code-workspace
 *.ipynb
 *.pptx
 pip*.bat
+*.yp

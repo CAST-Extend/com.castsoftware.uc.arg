@@ -54,7 +54,7 @@ class AipData(AipRestCall):
     _health_grade_ids = ['Efficiency','Robustness','Security','Changeability','Transferability']
 
     def __init__(self, config, timer_on=False,log_level=INFO):
-        super().__init__(config.aip_url, config.aip_user, config.aip_password, timer_on,log_level)
+        super().__init__(base_url=config.aip_url, user=config.aip_user, password=config.aip_password, track_time=timer_on,log_level=log_level)
 
         #self._rest=rest
         #self._base=app_list
@@ -164,7 +164,7 @@ class AipData(AipRestCall):
         for key, value in iso.items():
             try:
                 temp = DataFrame(columns=['category','violation'])
-                rp = json_normalize(self.get_rules(domain_id,snapshot_id,key)['rulePattern'])
+                rp = json_normalize(self.get_rules(domain_id,snapshot_id,key,return_raw=True)['rulePattern'])
                 temp['violation'] = rp['name']
                 temp['category'] = value
                 temp = temp.groupby(['category','violation']).size().reset_index(name='count') 
@@ -411,7 +411,8 @@ class HLData(HLRestCall):
     _data={}
 
     def __init__(self, config, timer_on=False,log_level=INFO):
-        super().__init__(config.hl_url, config.hl_user, config.hl_password, config.hl_instance, timer_on,log_level)
+        super().__init__(hl_base_url=f'{config.hl_url}/WS2/', hl_user=config.hl_user, hl_pswd=config.hl_password,
+                         hl_instance=config.hl_instance, timer_on=timer_on,log_level=log_level)
 
         for s in config.hl_list:
             self.info(f'Collecting Highlight data for {s}')
