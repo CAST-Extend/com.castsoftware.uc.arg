@@ -11,3 +11,4 @@ com.castsoftware.uc.arg.code-workspace
 *.pptx
 pip*.bat
 *.yp
+**test**
