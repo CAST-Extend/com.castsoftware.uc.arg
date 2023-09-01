@@ -3,11 +3,13 @@ from cast_arg.restCall import AipData,HLData
 from cast_arg.actionPlan import ActionPlan
 from cast_arg.config import Config
 from cast_arg.pages.greenIt import GreenIt
+from cast_arg.pages.summary import HighlightSummary
 
 from cast_arg.stats import OssStats,AIPStats,LicenseStats
 from cast_common.logger import Logger,DEBUG, INFO, WARN
 from cast_common.util import find_nth, no_dups, list_to_text,format_table
 from cast_arg.powerpoint import PowerPoint
+from cast_common.highlight import Highlight
 
 
 from pandas import DataFrame
@@ -42,6 +44,8 @@ class GeneratePPT(Logger):
     _hl_apps_df = pd.DataFrame()
     _hl_app_list = []
 
+    day_rate=1600
+
     def __init__(self, config:Config):
         super().__init__("generate",config.logging_generate)
         self._config = config
@@ -58,9 +62,11 @@ class GeneratePPT(Logger):
             self._aip_data = AipData(config,log_level=config.logging_aip)
         if config.hl_active:
             self.info("Collecting Highlight Data")
+            hl = Highlight(hl_base_url=config.hl_url,hl_user=config.hl_user,hl_pswd=config.hl_password, \
+                           hl_instance=config.hl_instance,hl_apps=config.hl_list)
             self.hl_pages = [
-                GreenIt(hl_user=config.hl_user,hl_pswd=config.hl_password,hl_instance=config.hl_instance,
-                        hl_base_url=config.hl_url,log_level=config.logging_highlight)
+                HighlightSummary(self.day_rate),
+                GreenIt()
             ]
             self._hl_data = HLData(config,log_level=config.logging_highlight)
 
@@ -125,7 +131,7 @@ class GeneratePPT(Logger):
         app_list = self._config.aip_list
         hl_list = self._config.hl_list
 
-        day_rate = 1600
+        day_rate = self.day_rate
 
         summary_near_term=AIPStats(day_rate,logger_level=self._config.logging_generate)
         summary_fix_now=AIPStats(day_rate,logger_level=self._config.logging_generate)
@@ -136,6 +142,7 @@ class GeneratePPT(Logger):
         lic_summary = LicenseStats(logger_level=self._config.logging_generate)
         summary_components = 0
 
+        self._ppt.replace_text('{app_cnt}',app_cnt)
         for idx in range(0,app_cnt):
             # create instance of action plan class 
             self.ap = ActionPlan (app_list,self._aip_data,self._ppt,self._config.output,day_rate)
@@ -331,6 +338,8 @@ class GeneratePPT(Logger):
                     lic_summary.add_high(lic.high)
                     lic_summary.add_medium(lic.medium)
                     lic_summary.add_low(lic.low)
+
+
                 except KeyError as ex:
                     self.warning(f'OSS information not found {str(ex)}')
                 """
@@ -534,13 +543,13 @@ class GeneratePPT(Logger):
     def fill_critical_rules(self,app_id,app_no):
         self.info('Filling critical rules table')
         rules_df = self._aip_data.critical_rules(app_id)
-
-#        crit_rule_cols = [col for col in rules_df if col.startswith('rulePattern')]
-        rules_df = rules_df[['rulePattern.name','rulePattern.critical']]
-        rule_summary_df=rules_df.groupby(['rulePattern.name']).size().reset_index(name='counts').sort_values(by=['counts'],ascending=False)
-        rule_summary_df=rule_summary_df.head(5)
-        self._ppt.update_table(f'app{app_no}_top_violations',rule_summary_df,include_index=False)
-
+        if not rules_df.empty:
+            rules_df = rules_df[['rulePattern.name','rulePattern.critical']]
+            rule_summary_df=rules_df.groupby(['rulePattern.name']).size().reset_index(name='counts').sort_values(by=['counts'],ascending=False)
+            rule_summary_df=rule_summary_df.head(5)
+            self._ppt.update_table(f'app{app_no}_top_violations',rule_summary_df,include_index=False)
+        else:
+            self.warning('This application contains no critical violations')
         # if not rules_df.empty:
         #     critical_rule_df = pd.json_normalize(rules_df['rulePattern'])
         #     critical_rule_df = critical_rule_df[['name','critical']]
@@ -642,9 +651,7 @@ class GeneratePPT(Logger):
                 lic_summary.loc[lic_summary['risk']=='Medium','forground']='127,127,127'
 
                 #update the powerpoint table
-                self._ppt.update_table(f'app{app_no}_HL_table_lic_risks',
-                                    lic_summary,include_index=False,
-                                    forground='forground')
+                self._ppt.update_table(f'app{app_no}_HL_table_lic_risks',lic_summary,include_index=False)
             
                 lic.high = lic_summary[lic_summary['risk']=='High']['comp count'].sum()
                 lic.medium = lic_summary[lic_summary['risk']=='Medium']['comp count'].sum()
