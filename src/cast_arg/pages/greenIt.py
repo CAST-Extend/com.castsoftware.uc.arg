@@ -9,7 +9,16 @@ from sys import exc_info
 
 class GreenIt(Highlight):
 
-    def report(self,app:str,app_no:int,prs:PowerPoint,output:str) -> bool:
+
+    def __init__(self,output:str,  
+                 hl_user:str=None, hl_pswd:str=None,hl_basic_auth=None, hl_instance:int=0,
+                 hl_apps:str=[],hl_tags:str=[], 
+                 hl_base_url:str=None, 
+                 log_level=INFO, timer_on=False):
+        super().__init__(hl_user, hl_pswd,hl_basic_auth, hl_instance,hl_apps,hl_tags, hl_base_url, log_level, timer_on)
+        self._output = output
+
+    def report(self,app:str,app_no:int) -> bool:
         status = True
         try:
             index = self.get_green_indexes(app)
@@ -17,31 +26,31 @@ class GreenIt(Highlight):
                 if idx == 'greenOccurrences':
                     val = int(val)
                 tag = f'{{app{app_no}_{idx}}}'
-                prs.replace_text(tag,val)
+                PowerPoint.ppt.replace_text(tag,val)
 
             detail = self.get_green_detail(app)
             detail = detail[detail['Occurrences'] != 0]
             detail=detail.drop(columns=['Contribution'])
 
             agr = detail[['Technology','Occurrences']].groupby('Technology').aggregate('sum').reindex()
-            prs.update_chart(f'app{app_no}_GreenTechPieChart',agr)
+            PowerPoint.ppt.update_chart(f'app{app_no}_GreenTechPieChart',agr)
             agr.sort_values('Occurrences',ascending=False,inplace=True)
-            prs.replace_text(f'{{app{app_no}_green_top_lang}}',agr.index[0])
-            prs.replace_text(f'{{app{app_no}_green_top_lang_count}}',int(agr.iloc[0,0]))
+            PowerPoint.ppt.replace_text(f'{{app{app_no}_green_top_lang}}',agr.index[0])
+            PowerPoint.ppt.replace_text(f'{{app{app_no}_green_top_lang_count}}',int(agr.iloc[0,0]))
 
             agr = detail[['Name','Occurrences']].groupby('Name').aggregate('sum').reindex()
             agr.sort_values('Occurrences',ascending=False,inplace=True)
-            prs.replace_text(f'{{app{app_no}_green_top_rule1}}',agr.index[0])
-            prs.replace_text(f'{{app{app_no}_green_top_rule2}}',agr.index[1])
+            PowerPoint.ppt.replace_text(f'{{app{app_no}_green_top_rule1}}',agr.index[0])
+            PowerPoint.ppt.replace_text(f'{{app{app_no}_green_top_rule2}}',agr.index[1])
 
             detail.sort_values(by=['Occurrences'],ascending=False,inplace=True)
             #detail['Contribution'] = detail['Contribution'].apply(lambda x: '{0:.2f}%'.format(x).rjust(10))
             detail['Occurrences'] = detail['Occurrences'].apply(lambda x: '{0:,.0f}'.format(x).rjust(10))
-            self.create_excel(app,detail,output)
+            self.create_excel(app,detail,self._output)
 
             #detail = detail.astype({'Contribution':'string'})
             detail['Technology'] = detail['Technology'].str.ljust(20)
-            prs.update_table(f'app{app_no}_GreenDetailTable',detail,include_index=False,max_rows=8)
+            PowerPoint.ppt.update_table(f'app{app_no}_GreenDetailTable',detail,include_index=False,max_rows=8)
 
 
             pass      

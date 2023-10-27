@@ -10,6 +10,7 @@ from cast_common.logger import Logger,DEBUG, INFO, ERROR
 from cast_common.restAPI import RestCall
 from cast_common.aipRestCall import AipRestCall
 from cast_common.hlRestCall import HLRestCall
+from cast_common.powerpoint import PowerPoint
 
 import enum
 import urllib.parse
@@ -53,8 +54,9 @@ class AipData(AipRestCall):
 
     _health_grade_ids = ['Efficiency','Robustness','Security','Changeability','Transferability']
 
-    def __init__(self, config, timer_on=False,log_level=INFO):
-        super().__init__(base_url=config.aip_url, user=config.aip_user, password=config.aip_password, track_time=timer_on,log_level=log_level)
+    def __init__(self, config,output:str=None,timer_on=False,log_level=INFO):
+        super().__init__(base_url=config.aip_url, user=config.aip_user, pswd=config.aip_password, 
+                         track_time=timer_on,log_level=log_level)
 
         #self._rest=rest
         #self._base=app_list
@@ -74,6 +76,11 @@ class AipData(AipRestCall):
                 if self._data[s]['snapshot']:
                     self.info('AIP is active')
                     self._data[s]['has data'] = True
+
+                    self.info('action plan data')
+                    (ap_df,ap_summary_df) = self.get_action_plan(domain_id,self._data[s]['snapshot']['id']) 
+                    self._data[s]['action_plan']=ap_df
+                    self._data[s]['action_plan_summary']=ap_summary_df
 
                     self.info('TQI compliance data')
                     self._data[s]['tqi_compliance']=self.aggregate_violation_ratio(domain_id,snapshot['id'],'60017',self._imp_list)
@@ -107,10 +114,6 @@ class AipData(AipRestCall):
 
 
 
-                    self.info('action plan data')
-                    (ap_df,ap_summary_df) = self.get_action_plan(domain_id,self._data[s]['snapshot']['id']) 
-                    self._data[s]['action_plan']=ap_df
-                    self._data[s]['action_plan_summary']=ap_summary_df
                     self.info('AIP data retrieval complete')
             else:
                 self.logger.warn(f'Domain not found for {s}')
@@ -437,24 +440,30 @@ class HLData(HLRestCall):
                     self._data[s]['cve_med_tot']=0
                     self._data[s]['cve_med_comp_tot']=0
                 else:
-                    self._data[s]['cve_crit_tot']=len(cves[cves['criticity']=='CRITICAL']['cve'].unique())
-                    self._data[s]['cve_crit_comp_tot']=len(cves[cves['criticity']=='CRITICAL']['component'].unique())
-                    self._data[s]['cve_high_tot']=len(cves[cves['criticity']=='HIGH']['cve'].unique())
-                    self._data[s]['cve_high_comp_tot']=len(cves[cves['criticity']=='HIGH']['component'].unique())
-                    self._data[s]['cve_med_tot']=len(cves[cves['criticity']=='MEDIUM']['cve'].unique())
-                    self._data[s]['cve_med_comp_tot']=len(cves[cves['criticity']=='MEDIUM']['component'].unique())
+                    if cves.empty:
+                        self.warning('No Vulnerabililty information available')
+                    else:
+                        self._data[s]['cve_crit_tot']=len(cves[cves['criticity']=='CRITICAL']['cve'].unique())
+                        self._data[s]['cve_crit_comp_tot']=len(cves[cves['criticity']=='CRITICAL']['component'].unique())
+                        self._data[s]['cve_high_tot']=len(cves[cves['criticity']=='HIGH']['cve'].unique())
+                        self._data[s]['cve_high_comp_tot']=len(cves[cves['criticity']=='HIGH']['component'].unique())
+                        self._data[s]['cve_med_tot']=len(cves[cves['criticity']=='MEDIUM']['cve'].unique())
+                        self._data[s]['cve_med_comp_tot']=len(cves[cves['criticity']=='MEDIUM']['component'].unique())
                 
                 if lic is None:
                     self._data[s]['lic_high_tot']=0
                     self._data[s]['lic_med_tot']=0
                 else:
                     # make some adjustment since HL data has changed
-                    lic['compliance']=lic['compliance'].str.replace('compliant','high')
-                    lic['compliance']=lic['compliance'].str.replace('partial','medium')
-                    lic['compliance']=lic['compliance'].str.replace('notCompliant','low')
+                    if cves.empty:
+                        self.warning('No License information available')
+                    else:
+                        lic['compliance']=lic['compliance'].str.replace('compliant','high')
+                        lic['compliance']=lic['compliance'].str.replace('partial','medium')
+                        lic['compliance']=lic['compliance'].str.replace('notCompliant','low')
 
-                    self._data[s]['lic_high_tot']=len(lic[lic['compliance']=='low']['component'].unique())
-                    self._data[s]['lic_med_tot']=len(lic[lic['compliance']=='medium']['component'].unique())
+                        self._data[s]['lic_high_tot']=len(lic[lic['compliance']=='low']['component'].unique())
+                        self._data[s]['lic_med_tot']=len(lic[lic['compliance']=='medium']['component'].unique())
 
                 self._data[s]['total_components']=total_components
             else:

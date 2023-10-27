@@ -17,7 +17,8 @@ class PowerPoint(common_ppt):
     Args:
         common_ppt: PowerPoint class found in com.castsoftware.uc.python.common
     """
-    def __init__(self,template:str,output:str,log_level=INFO) -> None:
+
+    def __init__(self,template:str=None,output:str=None,log_level=INFO) -> None:
         super().__init__(template,output,log_level)
 
     def replace_risk_factor(self, grades:Series, app_no:int=0, search_str:str=None):

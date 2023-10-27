@@ -4,8 +4,14 @@ from cast_arg.actionPlan import ActionPlan
 from cast_arg.config import Config
 from cast_arg.pages.greenIt import GreenIt
 from cast_arg.pages.summary import HighlightSummary
+from cast_arg.pages.benchmark import HighlightBenchmark
 
 from cast_arg.stats import OssStats,AIPStats,LicenseStats
+
+from cast_arg.pages.tech_detail_table import TechDetailTable
+
+
+from cast_common.mri import MRI
 from cast_common.logger import Logger,DEBUG, INFO, WARN
 from cast_common.util import find_nth, no_dups, list_to_text,format_table
 from cast_arg.powerpoint import PowerPoint
@@ -50,7 +56,8 @@ class GeneratePPT(Logger):
         super().__init__("generate",config.logging_generate)
         self._config = config
 
-        out = f"{config.output}/Project {config.project} - Tech DD Findings.pptx"
+        out = abspath(f"{config.output}/Project {config.project} - Tech DD Findings.pptx")
+        self.out=out
         self.info(f'Generating {out}')
 
         self._ppt = PowerPoint(config.template, out)
@@ -60,13 +67,24 @@ class GeneratePPT(Logger):
         if config.aip_active:
             self.info("Collecting AIP Data")
             self._aip_data = AipData(config,log_level=config.logging_aip)
+
+            self.mri_pages = [
+                TechDetailTable()
+
+            ]
+
         if config.hl_active:
             self.info("Collecting Highlight Data")
             hl = Highlight(hl_base_url=config.hl_url,hl_user=config.hl_user,hl_pswd=config.hl_password, \
                            hl_instance=config.hl_instance,hl_apps=config.hl_list)
+            self.hl_portfolio_pages = [
+                HighlightSummary(self.day_rate)
+            ]
             self.hl_pages = [
                 HighlightSummary(self.day_rate),
-                GreenIt()
+                HighlightBenchmark(),
+                GreenIt(self._config.output),
+
             ]
             self._hl_data = HLData(config,log_level=config.logging_highlight)
 
@@ -97,7 +115,19 @@ class GeneratePPT(Logger):
                 self._ppt.delete_slide(idx)
 
     def save_ppt(self):
-        self._ppt.save()
+        while True:
+            try:
+                self._ppt.save()
+                self.info(f'{self.out} saved.')
+                return 
+            except PermissionError: 
+                while answer := input (f'Error writing {self.out} powerpoint document, Retry [Y or N]:'):
+                    if answer.upper() == 'Y':
+                        break
+                    elif answer.upper() == 'N':
+                        return
+                    else:
+                        continue
 
     def replace_all_text(self):
         app_cnt = len(self._config.application)
@@ -142,6 +172,12 @@ class GeneratePPT(Logger):
         lic_summary = LicenseStats(logger_level=self._config.logging_generate)
         summary_components = 0
 
+        """Highlight Portfolio level pages """
+        if self._config.hl_active:
+            for proc in self.hl_portfolio_pages:
+                proc.report(hl_list)
+
+
         self._ppt.replace_text('{app_cnt}',app_cnt)
         for idx in range(0,app_cnt):
             # create instance of action plan class 
@@ -161,9 +197,13 @@ class GeneratePPT(Logger):
             self.info(f'********************* Working on pages for {app_title} ******************************')
             self._ppt.replace_text(f'{{app{app_no}_name}}',app_title)
 
+            if self._config.aip_active:
+                for proc in self.mri_pages:
+                    proc.report(app_id,app_no)
+
             if self._config.hl_active:
                 for proc in self.hl_pages:
-                    proc.report(hl_id,app_no,self._ppt,self._config.output)
+                    proc.report(hl_id,app_no)
 
             if self._config.aip_active:
                 if self._aip_data.has_data(app_id):
@@ -182,8 +222,8 @@ class GeneratePPT(Logger):
                     grade_all = self._aip_data.get_app_grades(app_id)
                     #self._ppt.replace_risk_factor(grade_all,app_no)
                     grade_by_tech_df = self._aip_data.get_grade_by_tech(app_id)
-                    grades = grade_by_tech_df.drop(['Documentation',"ISO","ISO_EFF","ISO_MAINT","ISO_REL","ISO_SEC"],axis=1)
-                    self._ppt.update_table(f'app{app_no}_grade_by_tech_table',grades)
+                    # grades = grade_by_tech_df.drop(['Documentation',"ISO","ISO_EFF","ISO_MAINT","ISO_REL","ISO_SEC"],axis=1)
+                    # self._ppt.update_table(f'app{app_no}_grade_by_tech_table',grades)
 
                     if not grade_by_tech_df.empty:
                         #add appmarq technology
@@ -252,7 +292,7 @@ class GeneratePPT(Logger):
                         self._ppt.replace_text(f'{{app{app_no}_comment_out_pct}}',percent_comment_out)
 
                         loc_tbl['percent']=pd.Series(["{0:.2f}%".format(val) for val in loc_tbl['percent']], index = loc_tbl.index)
-                        self._ppt.update_table(f'app{app_no}_loc_table',loc_tbl,has_header=False)
+                        self._ppt.update_table(f'app{app_no}_loc_table',loc_tbl,header_rows=0)
                         self._ppt.update_chart(f'app{app_no}_loc_pie_chart',DataFrame(loc_tbl['loc']))
 
                         # self._ppt.replace_grade(grade_all,app_no)
