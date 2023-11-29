@@ -25,7 +25,7 @@ class GreenIt(Highlight):
             for idx,val in index.items():
                 if idx == 'greenOccurrences':
                     val = int(val)
-                tag = f'{{app{app_no}_{idx}}}'
+                tag = f'{{app{app_no}_hl_{idx}}}'
                 PowerPoint.ppt.replace_text(tag,val)
 
             detail = self.get_green_detail(app)
@@ -35,13 +35,13 @@ class GreenIt(Highlight):
             agr = detail[['Technology','Occurrences']].groupby('Technology').aggregate('sum').reindex()
             PowerPoint.ppt.update_chart(f'app{app_no}_GreenTechPieChart',agr)
             agr.sort_values('Occurrences',ascending=False,inplace=True)
-            PowerPoint.ppt.replace_text(f'{{app{app_no}_green_top_lang}}',agr.index[0])
-            PowerPoint.ppt.replace_text(f'{{app{app_no}_green_top_lang_count}}',int(agr.iloc[0,0]))
+            PowerPoint.ppt.replace_text(f'{{app{app_no}_hl_green_top_lang}}',agr.index[0])
+            PowerPoint.ppt.replace_text(f'{{app{app_no}_hl_green_top_lang_count}}',int(agr.iloc[0,0]))
 
             agr = detail[['Name','Occurrences']].groupby('Name').aggregate('sum').reindex()
             agr.sort_values('Occurrences',ascending=False,inplace=True)
-            PowerPoint.ppt.replace_text(f'{{app{app_no}_green_top_rule1}}',agr.index[0])
-            PowerPoint.ppt.replace_text(f'{{app{app_no}_green_top_rule2}}',agr.index[1])
+            PowerPoint.ppt.replace_text(f'{{app{app_no}_hl_green_top_rule1}}',agr.index[0])
+            PowerPoint.ppt.replace_text(f'{{app{app_no}_hl_green_top_rule2}}',agr.index[1])
 
             detail.sort_values(by=['Occurrences'],ascending=False,inplace=True)
             #detail['Contribution'] = detail['Contribution'].apply(lambda x: '{0:.2f}%'.format(x).rjust(10))
