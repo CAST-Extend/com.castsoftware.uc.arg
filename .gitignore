@@ -12,3 +12,4 @@ com.castsoftware.uc.arg.code-workspace
 pip*.bat
 *.yp
 **test**
+config*.json
