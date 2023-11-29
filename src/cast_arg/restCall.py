@@ -354,7 +354,7 @@ class AipData(AipRestCall):
         return rslt
 
     def get_grade_by_tech(self,app):
-        grade_df = self.grades(app).round(2).applymap('{:,.2f}'.format)
+        grade_df = self.grades(app).round(2).map('{:,.2f}'.format)
         grade_df = self.grades(app).round(2)
         grade_df = grade_df[grade_df.index.isin(['All'])==False]
 
@@ -362,18 +362,18 @@ class AipData(AipRestCall):
         sizing_df = sizing_df[sizing_df.index.isin(['All'])==False]
         sizing_df = DataFrame(sizing_df["Number of Code Lines"].rename("LOC")).dropna()
         sizing_df.sort_values(by=['LOC'], ascending=False,inplace=True)
-        sizing_df = sizing_df.applymap('{:,.0f}'.format)
+        sizing_df = sizing_df.map('{:,.0f}'.format)
         
         tech = sizing_df.join(grade_df) 
 
         sizing_df = DataFrame(self.sizing(app)) 
         sizing_df = sizing_df[sizing_df.index.isin(['All'])==False]
         sizing_df = DataFrame(sizing_df["Critical Violations"]).dropna()
-        sizing_df = sizing_df.applymap('{:,.0f}'.format)
+        sizing_df = sizing_df.map('{:,.0f}'.format)
 
         tech = tech.join(sizing_df)
 #        tech.sort_values(by='LOC',ascending=False,inplace=True)
-#        tech = tech.applymap('{:,.2f}'.format)
+#        tech = tech.map('{:,.2f}'.format)
 
         
         return tech
@@ -455,7 +455,7 @@ class HLData(HLRestCall):
                     self._data[s]['lic_med_tot']=0
                 else:
                     # make some adjustment since HL data has changed
-                    if cves.empty:
+                    if lic.empty:
                         self.warning('No License information available')
                     else:
                         lic['compliance']=lic['compliance'].str.replace('compliant','high')
