@@ -10,7 +10,9 @@ from tqdm import tqdm
 
 
 class TechDetailTable(AipRestCall):
-
+    """
+    This class is used to fill in the AIP Technical detail table
+    """
     def report(self,app_name:str,app_no:int) -> bool:
         # app_tag = f'app{app_no}'
 
@@ -21,9 +23,9 @@ class TechDetailTable(AipRestCall):
 
         domain_id = self.get_domain(app_name)
         snapshot = self.get_latest_snapshot(domain_id)
-        sizing_df = self.get_sizing_by_technology(domain_id,snapshot,sizing)
         (ap_df,ap_summary_df)=self.get_action_plan(domain_id,snapshot['id'])        
 
+        sizing_df = self.get_sizing_by_module(domain_id,snapshot,sizing)
         sizing_df['Fix Now']=0
         sizing_df['Near Term']=0
         sizing_df['Mid Term']=0
@@ -55,8 +57,9 @@ class TechDetailTable(AipRestCall):
         pass       
 
     def _get_counts(self,data:DataFrame,priority:str,tech:str) -> int:
+        t = tech.replace('+',r'\+').lower()
         fn = data[data['Action Plan Priority']==priority]
-        fn = fn[fn['Technology'].str.lower().str.contains(tech.lower())]
+        fn = fn[fn['Technology'].str.lower().str.contains(t)]
         return len(fn)
         
 
