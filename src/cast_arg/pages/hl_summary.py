@@ -74,12 +74,12 @@ class HighlightSummary(Highlight):
 
         text = {
             'quality':{'high':'high','medium':'moderate','low':'low-level'},
-            'improvement':{'high':'no immediate action required','medium':'room for improvment','low':'ample opportunity for improvement'},
-            'maintain':{'high':'highly maintainable','medium':'maintainable but needs improvment','low':'is not maintainable'},
+            'improvement':{'high':'no immediate action required','medium':'room for improvement','low':'ample opportunity for improvement'},
+            'maintain':{'high':'highly maintainable','medium':'maintainable but needs improvement','low':'is not maintainable'},
 
             'quality_alt_1':{'high':'well','medium':'fair','low':'bad'},
             'quality_alt_2':{'high':'impressive','medium':'fair','low':'poor'},
-            'quality_alt_3':{'high':'stands out','medium':'average','low':'in need of improvment'},
+            'quality_alt_3':{'high':'stands out','medium':'average','low':'in need of improvement'},
             'maturity':{'high':'high','medium':'medium','low':'low'},
             'effort':{'high':'minimal','medium':'medium','low':'considerable'},
             'risk':{'high':'low amount of','medium':'average','low':'very high'}
@@ -187,6 +187,8 @@ class HighlightSummary(Highlight):
             self.replace_text('oss_high_critical_total',oss_high_crit_total)
 
     def _get_high_low_factors(self,factor:list):
+        if len(factor)==0:
+            return (0,0,0,0)
         low_app = min(factor, key=factor.get)
         low_score = round(factor[low_app],1)
         high_app = max(factor, key=factor.get)

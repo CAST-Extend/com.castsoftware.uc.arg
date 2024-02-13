@@ -32,11 +32,11 @@ class ActionPlan(AipRestCall):
         self._aip_data=aip_data
 
         #ef_name = abspath(f'{dirname(__file__)}/Effort.csv')
-        ef_name = abspath(f'{getsitepackages()[-1]}/cast_arg/Effort.csv')
+        self.ef_name = abspath(f'{getsitepackages()[-1]}/cast_arg/Effort.csv')
 
-        if not exists(ef_name):
-            raise RuntimeError(f'Required file not found: {ef_name}')
-        self._effort_df = pd.read_csv(ef_name)
+        if not exists(self.ef_name):
+            raise RuntimeError(f'Required file not found: {self.ef_name}')
+        self._effort_df = pd.read_csv(self.ef_name)
 
         self._day_rate = day_rate
         self._fix_now = AIPStats(day_rate)
@@ -61,7 +61,18 @@ class ActionPlan(AipRestCall):
 
         (ap_df,ap_summary_df)=self._aip_data.action_plan(app_id)
         if not ap_summary_df.empty:
-            ap_summary_df = ap_summary_df.merge(self._effort_df, how='inner', on='Technical Criteria')
+#            ap_summary_df = ap_summary_df.merge(self._effort_df, how='inner', on='Technical Criteria')
+            ap_summary_df = ap_summary_df.merge(self._effort_df, how='left', on='Technical Criteria')
+            missing_effort = ap_summary_df[ap_summary_df['Eff Hours'].isnull()]['Technical Criteria']
+            if len(missing_effort) > 0:
+                self._log.warning('*******************************************')
+                self._log.warning('Action plan effort will not be accurate!')
+                self._log.warning(f'Missing entries for: {missing_effort.tolist()}')
+                self._log.warning(f'Update Effort Table located at: {self.ef_name}')
+                self._log.warning('*******************************************')
+                ap_summary_df.loc[ap_summary_df['Technical Criteria'].isin(missing_effort),'Eff Hours']=0
+
+
             #cost_col = (ap_summary_df['Eff Hours'] * ap_summary_df['No. of Actions'])/8
             ap_summary_df['Days Effort'] = (ap_summary_df['Eff Hours'] * ap_summary_df['No. of Actions'])/8
             ap_summary_df['Cost Est.'] = ap_summary_df['Days Effort'] * self._day_rate
@@ -94,8 +105,11 @@ class ActionPlan(AipRestCall):
 
             ap_table = ap_table.drop(columns=['comment','tag','Technical Criteria','Days Effort','Cost Est.','Eff Hours'])
 
-            self._ppt.update_table(f'app{app_no}_action_plan',ap_table.head(29),include_index=False,background='RGB')
-
+            try:
+                self._ppt.update_table(f'app{app_no}_action_plan',ap_table.head(29),include_index=False,background='RGB')
+            except ValueError as ex:
+                self._log.warning('Action plan table missing from tamplate')
+                
             sum = ap_summary_df['No. of Actions'].sum()
             self._ppt.replace_text(f"{{app{app_no}_total_violations}}",str(sum))
 

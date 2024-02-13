@@ -25,7 +25,8 @@ __copyright__ = "Copyright 2022, CAST Software"
     This class is used to retrieve information from the CAST AIP REST API
 """
 class AipData(AipRestCall):
-    _data={}
+    _config=None
+    _data=None
     _base=[]
 
     _sizing = {
@@ -54,78 +55,90 @@ class AipData(AipRestCall):
 
     _health_grade_ids = ['Efficiency','Robustness','Security','Changeability','Transferability']
 
-    def __init__(self, config,output:str=None,timer_on=False,log_level=INFO):
-        super().__init__(base_url=config.aip_url, user=config.aip_user, pswd=config.aip_password, 
-                         track_time=timer_on,log_level=log_level)
+    def __init__(self, config:dict=None,output:str=None,timer_on=False,log_level=INFO):
+        if AipData._data is None:
+            AipData._data={}
+            super().__init__(base_url=config.aip_url, user=config.aip_user, pswd=config.aip_password, 
+                             token=config.aip_token, track_time=timer_on,log_level=log_level)
+            
+            if AipData._config is None:
+                AipData._config = config
 
-        #self._rest=rest
-        #self._base=app_list
+            for s in config.aip_list:
+                self.info(f'*******Collecting AIP data for {s}********')
+                AipData._data[s]={}
+                AipData._data[s]['has data'] = False
+    #            central_schema = f'{s}_central'.replace('-','_')
+                domain_id = self.get_domain(s)
+                if domain_id == -1:
+                    while answer := input (f'Continue without {s} application data?'):
+                        if answer.upper() == 'Y':
+                            self._log.warning('***************************************************')
+                            self._log.warning('Report results will be incomplete')
+                            self._log.warning('***************************************************')
+                            break
+                        elif answer.upper() == 'N':
+                            raise SystemExit  #connection failed, exit here
+                        else:
+                            continue
 
-        for s in config.aip_list:
-            self.info(f'*******Collecting AIP data for {s}********')
-            self._data[s]={}
-            self._data[s]['has data'] = False
-#            central_schema = f'{s}_central'.replace('-','_')
-            domain_id = self.get_domain(s)
-            if domain_id == -1:
-                raise SystemExit  #connection failed, exit here
-            if domain_id is not None:
-                self._data[s]['domain_id']=domain_id
-                snapshot = self.get_latest_snapshot(domain_id)
-                self._data[s]['snapshot']=snapshot
-                if self._data[s]['snapshot']:
-                    self.info('AIP is active')
-                    self._data[s]['has data'] = True
+                if domain_id is not None:
+                    AipData._data[s]['domain_id']=domain_id
+                    snapshot = self.get_latest_snapshot(domain_id)
+                    AipData._data[s]['snapshot']=snapshot
+                    if AipData._data[s]['snapshot']:
+                        self.info('AIP is active')
+                        AipData._data[s]['has data'] = True
 
-                    self.info('action plan data')
-                    (ap_df,ap_summary_df) = self.get_action_plan(domain_id,self._data[s]['snapshot']['id']) 
-                    self._data[s]['action_plan']=ap_df
-                    self._data[s]['action_plan_summary']=ap_summary_df
+                        self.info('action plan data')
+                        (ap_df,ap_summary_df) = self.get_action_plan(domain_id,AipData._data[s]['snapshot']['id']) 
+                        AipData._data[s]['action_plan']=ap_df
+                        AipData._data[s]['action_plan_summary']=ap_summary_df
 
-                    self.info('TQI compliance data')
-                    self._data[s]['tqi_compliance']=self.aggregate_violation_ratio(domain_id,snapshot['id'],'60017',self._imp_list)
+                        self.info('TQI compliance data')
+                        AipData._data[s]['tqi_compliance']=self.aggregate_violation_ratio(domain_id,snapshot['id'],'60017',self._imp_list)
 
-                    self.info('documentation compliance data')
-                    self._data[s]['doc_compliance']=self.aggregate_violation_ratio(domain_id,snapshot['id'],'66033',self._doc_list,False)
+                        self.info('documentation compliance data')
+                        AipData._data[s]['doc_compliance']=self.aggregate_violation_ratio(domain_id,snapshot['id'],'66033',self._doc_list,False)
 
-                    self.info('Grades by technololgy')
-                    self._data[s]['grades']=self.get_grades_by_technology(domain_id,self._data[s]['snapshot'])
+                        self.info('Grades by technololgy')
+                        AipData._data[s]['grades']=self.get_grades_by_technology(domain_id,AipData._data[s]['snapshot'])
 
-                    self.info('Sizing by technical')
-                    self._data[s]['sizing']=self.get_sizing_by_technology(domain_id,self._data[s]['snapshot'],self._sizing)
+                        self.info('Sizing by technical')
+                        AipData._data[s]['sizing']=self.get_sizing_by_technology(domain_id,AipData._data[s]['snapshot'],self._sizing)
 
-                    self.info('LOC data')
-                    self._data[s]['loc_sizing']=self.get_sizing(domain_id,self._sizing) 
+                        self.info('LOC data')
+                        AipData._data[s]['loc_sizing']=self.get_sizing(domain_id,self._sizing) 
 
-                    self.info('Technical sizing data')
-                    self._data[s]['tech_sizing']=self.get_sizing(domain_id,self._tech_sizing) 
+                        self.info('Technical sizing data')
+                        AipData._data[s]['tech_sizing']=self.get_sizing(domain_id,self._tech_sizing) 
 
-                    self.info('Violation sizing data')
-                    self._data[s]['violation_sizing']=self.get_violation_CR(domain_id)
+                        self.info('Violation sizing data')
+                        AipData._data[s]['violation_sizing']=self.get_violation_CR(domain_id)
 
-                    self.info('Critical rules')
-                    self._data[s]['critical_rules']=self.get_rules(domain_id,self._data[s]['snapshot']['id'],60017,non_critical=False)
+                        self.info('Critical rules')
+                        AipData._data[s]['critical_rules']=self.get_rules(domain_id,AipData._data[s]['snapshot']['id'],60017,non_critical=False)
 
-                    self.info('ISO rules')
-                    self._data[s]['ISO']=self._get_iso_rules(domain_id,snapshot['id'])
+                        self.info('ISO rules')
+                        AipData._data[s]['ISO']=self._get_iso_rules(domain_id,snapshot['id'])
 
-                    # self.info('Green IT Index')
-                    # self._data[s]['GreenIT']=self._get_green_rules(domain_id,snapshot['id'])
+                        # self.info('Green IT Index')
+                        # AipData._data[s]['GreenIT']=self._get_green_rules(domain_id,snapshot['id'])
 
 
 
-                    self.info('AIP data retrieval complete')
-            else:
-                self.logger.warn(f'Domain not found for {s}')
+                        self.info('AIP data retrieval complete')
+                else:
+                    self.logger.warn(f'Domain not found for {s}')
 
     def has_data(self, app):
-        return self._data[app]['has data']
+        return AipData._data[app]['has data']
 
     def data(self,app):
-        return self._data[app]
+        return AipData._data[app]
 
     def iso_rules(self, app):
-        return self._data[app]['ISO']
+        return AipData._data[app]['ISO']
 
     def _get_green_it_rules(self,domain_id,snapshot_id):
         iso={20140522:"Green IT Index"}
@@ -301,7 +314,7 @@ class AipData(AipRestCall):
 
     def calc_grades_all_apps(self):
         all_app=DataFrame()
-        for row in self._data:
+        for row in AipData._data:
             if self.has_data(row):
                 app_name=self.snapshot(row)['name']
                 grades=self.grades(row)
@@ -336,7 +349,7 @@ class AipData(AipRestCall):
     def get_all_app_text(self):
         rslt = ""
 
-        data = self._data
+        data = AipData._data
         l = len(self._base)
         if l == 1:
             return self.snapshot(self._base[0])['name']

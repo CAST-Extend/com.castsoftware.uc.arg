@@ -2,13 +2,17 @@ from cast_arg.restCall import AipData,HLData
 #from cast_arg.powerpoint import PowerPoint
 from cast_arg.actionPlan import ActionPlan
 from cast_arg.config import Config
-from cast_arg.pages.greenIt import GreenIt
-from cast_arg.pages.summary import HighlightSummary
-from cast_arg.pages.benchmark import HighlightBenchmark
+from cast_arg.pages.hl_cloud import CloudMaturity
+from cast_arg.pages.hl_greenIt import GreenIt
+from cast_arg.pages.hl_summary import HighlightSummary
+from cast_arg.pages.hl_benchmark import HighlightBenchmark
+from cast_arg.pages.mri_strengh_improvement import StrengthImprovment
+from cast_arg.pages.mri_grades import MRIGrades
+from cast_arg.pages.mri_sizing import MRISizing
 
 from cast_arg.stats import OssStats,AIPStats,LicenseStats
 
-from cast_arg.pages.tech_detail_table import TechDetailTable
+from cast_arg.pages.mri_tech_detail_table import TechDetailTable
 
 
 from cast_common.mri import MRI
@@ -17,6 +21,7 @@ from cast_common.util import find_nth, no_dups, list_to_text,format_table
 from cast_arg.powerpoint import PowerPoint
 from cast_common.highlight import Highlight
 
+from copy import deepcopy
 
 from pandas import DataFrame
 from pptx import Presentation
@@ -60,19 +65,24 @@ class GeneratePPT(Logger):
         self.out=out
         self.info(f'Generating {out}')
 
-        self._ppt = PowerPoint(config.template, out)
+        self._ppt = PowerPoint(config)
 
         # TODO: Handle cases where on HL data is needed and not AIP.
         self.hl_pages = []
         if config.aip_active:
             self.info("Collecting AIP Data")
-            self._aip_data = AipData(config,log_level=config.logging_aip)
+            try:
+                self._aip_data = AipData(config,log_level=config.logging_aip)
+            except PermissionError:
+                self.error('Invalid MRI REST API Credentials!')
+                exit (1)
 
             self.mri_pages = [
-                TechDetailTable()
-
+                MRIGrades(log_level=INFO,ppt=self._ppt),
+                MRISizing(),
+                TechDetailTable(),
+                StrengthImprovment()
             ]
-
         if config.hl_active:
             self.info("Collecting Highlight Data")
             hl = Highlight(hl_base_url=config.hl_url,hl_user=config.hl_user,hl_pswd=config.hl_password, \
@@ -81,9 +91,10 @@ class GeneratePPT(Logger):
                 HighlightSummary(self.day_rate)
             ]
             self.hl_pages = [
+                CloudMaturity(self._config.output,ppt=self._ppt),
+                GreenIt(),
                 HighlightSummary(self.day_rate),
                 HighlightBenchmark(),
-                GreenIt(self._config.output),
 
             ]
             self._hl_data = HLData(config,log_level=config.logging_highlight)
@@ -93,12 +104,54 @@ class GeneratePPT(Logger):
 
         # self.remove_proc_slides(self._generate_procs)
 
-        self._ppt.duplicate_slides(app_cnt)
-        self._ppt.copy_block("each_app",["app"],app_cnt)
+        if app_cnt == 1: 
+            s = self._ppt.get_shape_by_name('port_level_slide')
+            pass
+            #self._ppt.delete_slide
+        else:
+            self._ppt.duplicate_slides(app_cnt)
+            self._ppt.copy_block("each_app",["app"],app_cnt)
 
-        self._ppt.replace_text("{app#_","{app1_")
+        #self._ppt.replace_text("{app#_","{app1_")
 
+        self.expand_tables(config,['project_overview'])
         self.replace_all_text()
+
+    def expand_tables(self,config:Config,table_names:list):
+        app_cnt = len(config.application)
+        for tbl_name in table_names:
+            try:
+                table = self._ppt.get_shape_by_name(tbl_name)
+                if table is None:
+                    raise ValueError(f'Table not found in template: {tbl_name}')
+                max_rows = self._ppt.table_max_rows(table) 
+                if max_rows < app_cnt:
+                    max_rows = app_cnt
+                table = src_table = table.table
+
+                for idx in range(1,app_cnt):
+                    new_row = deepcopy(src_table._tbl.tr_lst[1]) 
+
+                    #spill over to the next page
+                    if idx+1 == max_rows:
+                        table = self._ppt.get_shape_by_name(f'{tbl_name}_spill')
+                        if table is None:
+                            raise ValueError(f'Table not found in template: {tbl_name}_spill')
+                            if table is None:
+                                raise ValueError(f'Table not found in template: {tbl_name}_spill')
+                        table = table.table
+
+                    table._tbl.append(new_row)
+                    c_row = len(table.rows)-1
+
+                    for col in range(0,len(table.columns)):
+                        new_cell = table.cell(c_row,col) 
+                        for p in new_cell.text_frame.paragraphs:
+                            self._ppt._replace_paragraph_text(p, '{app1',f'{{app{idx+1}')
+                        pass
+                    pass
+            except ValueError:
+                self.warning(f'table not found {tbl_name}')
 
     def remove_proc_slides(self,keep_it):
         indexes=[]
@@ -114,20 +167,20 @@ class GeneratePPT(Logger):
             if not keep_it:
                 self._ppt.delete_slide(idx)
 
-    def save_ppt(self):
-        while True:
-            try:
-                self._ppt.save()
-                self.info(f'{self.out} saved.')
-                return 
-            except PermissionError: 
-                while answer := input (f'Error writing {self.out} powerpoint document, Retry [Y or N]:'):
-                    if answer.upper() == 'Y':
-                        break
-                    elif answer.upper() == 'N':
-                        return
-                    else:
-                        continue
+    # def save_ppt(self):
+    #     while True:
+    #         try:
+    #             self._ppt.save()
+    #             self.info(f'{self.out} saved.')
+    #             return 
+    #         except PermissionError: 
+    #             while answer := input (f'Error writing {self.out} powerpoint document, Retry [Y or N]:'):
+    #                 if answer.upper() == 'Y':
+    #                     break
+    #                 elif answer.upper() == 'N':
+    #                     return
+    #                 else:
+    #                     continue
 
     def replace_all_text(self):
         app_cnt = len(self._config.application)
@@ -177,7 +230,6 @@ class GeneratePPT(Logger):
             for proc in self.hl_portfolio_pages:
                 proc.report(hl_list)
 
-
         self._ppt.replace_text('{app_cnt}',app_cnt)
         for idx in range(0,app_cnt):
             # create instance of action plan class 
@@ -199,7 +251,8 @@ class GeneratePPT(Logger):
 
             if self._config.aip_active:
                 for proc in self.mri_pages:
-                    proc.report(app_id,app_no)
+                    self.info(f'Generating {proc.description}')
+                    proc.run(app_id,app_no)
 
             if self._config.hl_active:
                 for proc in self.hl_pages:
@@ -212,39 +265,11 @@ class GeneratePPT(Logger):
 
                     self.info('Filling risk factors for the executive summary page')
                     # do risk factors for the executive summary page
-                    self.fill_aip_grades(self._aip_data,app_id, app_no)
                     risk_grades = self.each_risk_factor(self._aip_data,app_id, app_no)
                     self._ppt.replace_text(f'{{app{app_no}_high_risk_grade_names}}',list_to_text(risk_grades.index.values))
 
-
-                    self.info('Filling Technical details TABLE')
-                    # Technical Overview - Technical details TABLE
-                    grade_all = self._aip_data.get_app_grades(app_id)
-                    #self._ppt.replace_risk_factor(grade_all,app_no)
-                    grade_by_tech_df = self._aip_data.get_grade_by_tech(app_id)
-                    # grades = grade_by_tech_df.drop(['Documentation',"ISO","ISO_EFF","ISO_MAINT","ISO_REL","ISO_SEC"],axis=1)
-                    # self._ppt.update_table(f'app{app_no}_grade_by_tech_table',grades)
-
-                    if not grade_by_tech_df.empty:
-                        #add appmarq technology
-                        self._ppt.replace_text(f'{{app{app_no}_largest_tech}}',grade_by_tech_df.index[0])
-
-                        self.info('Filling Technical Overview')
-                        # Technical Overview - Lines of code by technology GRAPH
-                        self._ppt.update_chart(f'app{app_no}_sizing_pie_chart',DataFrame(grade_by_tech_df['LOC']))
-
                     snapshot = self._aip_data.snapshot(app=app_id)
-                    # app_name = snapshot['name']
-                    # self._ppt.replace_text(f'{{app{app_no}_name}}',app_name)
                     self._ppt.replace_text(f'{{app{app_no}_all_technogies}}',list_to_text(snapshot['technology']))
-
-                    #calculate high and medium risk factors
-                    risk_grades = self._aip_data.calc_health_grades_high_risk(grade_all)
-                    if risk_grades.empty:
-                        risk_grades = self._aip_data.calc_health_grades_medium_risk(grade_all)
-                    self._ppt.replace_text(f'{{app{app_no}_at_risk_grade_names}}',list_to_text(risk_grades.index.tolist()).lower())
-
-                    self.fill_strengh_improvement_tbl(app_id,app_no)
                     
                     """
                         Populate the document insites page
@@ -262,44 +287,6 @@ class GeneratePPT(Logger):
                     doc_df['RGB'] = np.where(doc_df.Score >= 3,'194,236,213',np.where(doc_df.Score < 2,'255,210,210','255,240,194'))
                     doc_df.Score = doc_df.Score.map('{:.2f}'.format)
                     self._ppt.update_table(f'app{app_no}_doc_table',doc_df,include_index=False,background='RGB')
-                    
-
-
-                   
-                    loc_df = self._aip_data.get_loc_sizing(app_id)
-                    if len(loc_df) > 0:
-                        loc = loc_df['Number of Code Lines']
-                        self._ppt.replace_loc(loc,app_no)
-
-                        loc_tbl = pd.DataFrame.from_dict(data=self._aip_data.get_loc_sizing(app_id),orient='index').drop('Critical Violations')
-                        loc_tbl = loc_tbl.rename(columns={0:'loc'})
-                        loc_tbl['percent'] = round((loc_tbl['loc'] / loc_tbl['loc'].sum()) * 100,2)
-                        loc_tbl['loc']=pd.Series(["{0:,.0f}".format(val) for val in loc_tbl['loc']], index = loc_tbl.index)
-
-                        percent_comment = loc_tbl.loc['Number of Comment Lines','percent']
-                        percent_comment_out = loc_tbl.loc['Number of Commented-out Code Lines','percent']
-
-                        if percent_comment < 15:
-                            comment_level='low'
-                        elif percent_comment > 15 and percent_comment <= 20:
-                            comment_level='good'
-                        else:
-                            comment_level='high'
-                    
-                        self._ppt.replace_text(f'{{app{app_no}_comment_hl}}',comment_level)
-                        self._ppt.replace_text(f'{{app{app_no}_comment_level}}',comment_level)
-                        self._ppt.replace_text(f'{{app{app_no}_comment_pct}}',percent_comment)
-                        self._ppt.replace_text(f'{{app{app_no}_comment_out_pct}}',percent_comment_out)
-
-                        loc_tbl['percent']=pd.Series(["{0:.2f}%".format(val) for val in loc_tbl['percent']], index = loc_tbl.index)
-                        self._ppt.update_table(f'app{app_no}_loc_table',loc_tbl,header_rows=0)
-                        self._ppt.update_chart(f'app{app_no}_loc_pie_chart',DataFrame(loc_tbl['loc']))
-
-                        # self._ppt.replace_grade(grade_all,app_no)
-
-                        self.fill_sizing(app_id,app_no)
-                        self.fill_violations(app_id,app_no)
-    
                     self.fill_critical_rules(app_id,app_no)
 
                     """
@@ -374,7 +361,6 @@ class GeneratePPT(Logger):
 
                     hl_summary.add_components(components)
 
-#                    if not lic.empty:
                     lic_summary.add_high(lic.high)
                     lic_summary.add_medium(lic.medium)
                     lic_summary.add_low(lic.low)
@@ -382,19 +368,21 @@ class GeneratePPT(Logger):
 
                 except KeyError as ex:
                     self.warning(f'OSS information not found {str(ex)}')
+
+
                 """
                     Cloud ready excel sheet generation
                 """
-                try:
-                    cloud = self._hl_data.get_cloud_info(hl_id)
-                    cloud = cloud[['cloudRequirement.display','Technology','cloudRequirement.ruleType','cloudRequirement.criticality','contributionScore','roadblocks']]
-                    file_name = f'{self._config.output}/cloud-{self._config.title_list[idx]}.xlsx'
-                    writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
-                    col_widths=[50,10,10,10,10,10,10]
-                    cloud_tab = format_table(writer,cloud,'Cloud Data',col_widths)
-                    writer.close()
-                except Exception as e:
-                    self.error(f'unknown error while processing cloud ready data: {str(e)}')
+                # try:
+                #     cloud = self._hl_data.get_cloud_info(hl_id)
+                #     cloud = cloud[['cloudRequirement.display','Technology','cloudRequirement.ruleType','cloudRequirement.criticality','contributionScore','roadblocks']]
+                #     file_name = f'{self._config.output}/cloud-{self._config.title_list[idx]}.xlsx'
+                #     writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
+                #     col_widths=[50,10,10,10,10,10,10]
+                #     cloud_tab = format_table(writer,cloud,'Cloud Data',col_widths)
+                #     writer.close()
+                # except Exception as e:
+                #     self.error(f'unknown error while processing cloud ready data: {str(e)}')
 
 
             summary_fix_now.add_effort(fix_now_total.effort)
@@ -414,7 +402,6 @@ class GeneratePPT(Logger):
             summary_total.add_data(summary_near_term.data)
             summary_total.add_data(summary_mid_long_term.data)
             summary_total.replace_text(self._ppt,app_no,'summary_total')
-
 
             #replace text for all aip and HL statistics in the powerpoint document
             self.ap.fix_now.replace_text(self._ppt,app_no,'fix_now')
@@ -492,94 +479,6 @@ class GeneratePPT(Logger):
         self._ppt.remove_empty_placeholders()
         return risk_grades
 
-    def get_grade_color(self,grade):
-        rgb = 0
-        if grade > 3:
-            rgb = RGBColor(0,176,80) # light green
-        elif grade <3 and grade > 2:
-            rgb = RGBColor(214,142,48) # yellow
-        else:
-            rgb = RGBColor(255,0,0) # red
-        return rgb
-
-    def fill_aip_grades(self,aip_data, app_id, app_no):
-        self.info('Filling AIP grades data')
-        app_level_grades = aip_data.get_app_grades(app_id)
-        for name, value in app_level_grades.T.items():
-            # fill grades
-            grade = round(value,2)
-            rpl_str = f'{{app{app_no}_grade_{name}}}'
-            self._ppt.replace_text(rpl_str,grade)
-            self.debug(f'replaced {rpl_str} with {grade}')
-
-            # fill grade risk factor (high, medium or low)
-            rpl_str = f'{{app{app_no}_risk_{name}}}'
-            risk = ''
-            if grade < 2:
-                risk = 'high'
-            elif grade < 3:
-                risk = 'medium'
-            else:
-                risk = 'low'
-            self._ppt.replace_text(rpl_str,risk)
-            self.debug(f'replaced {rpl_str} with {risk}')
-
-            #update grade box color and slider postion 
-            id_base = f'app{app_no}_grade'
-            box_name = f'{id_base}_{name}_box'
-            txt_name = f'{id_base}_{name}_text'
-            slider_name = f'{id_base}_{name}_slider'
-            color = self.get_grade_color(grade)
-
-            for slide in self._ppt._prs.slides:
-                box = self._ppt.get_shape_by_name(box_name,slide)
-                if not box is None:
-                    box.line.color.rgb = color
-
-                txt = self._ppt.get_shape_by_name(txt_name,slide)
-                if not txt is None and txt.has_text_frame:
-                    paragraphs = txt.text_frame.paragraphs
-                    self._ppt.change_paragraph_color(paragraphs[0],color)
-
-                slider = self._ppt.get_shape_by_name(slider_name,slide)
-                if not slider is None:
-                    self._ppt.update_grade_slider(slider,[grade])
-
-
-
-
-    def fill_strengh_improvement_tbl(self,app_id,app_no):
-        self.info('Filling strength and improvment table')
-        """
-            Populate the strengths and improvement page
-            The necessary data is found in the loc_tbl
-        """
-        imp_df = self._aip_data.tqi_compliance(app_id)
-        imp_df.drop(columns=['Weight','Total','Succeeded','Compliance'],inplace=True)
-        imp_df.sort_values(by=['Score','Rule'], inplace=True, ascending = False)
-
-        file_name = f'{self._config.output}/health-{self._config.title_list[app_no-1]}.xlsx'
-        writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
-        col_widths=[50,50,10,10,10]
-        cloud_tab = format_table(writer,imp_df,'Health Data',col_widths)
-        writer.close()
-
-        imp_df.drop(columns=['Detail'],inplace=True)
-        imp_df['RGB'] = np.where(imp_df.Score >= 3,'194,236,213',\
-            np.where(imp_df.Score < 2,'255,210,210','255,240,194'))
-        imp_df.Score = imp_df.Score.map('{:.2f}'.format)
-
-        #cause_name = abspath(f'{dirname(__file__)}/cause.json')
-
-        cause_name = abspath(f'{getsitepackages()[-1]}/cast_arg/cause.json')
-        imp_df['Cause']=''
-        with open(cause_name) as json_file:
-            tech_data = json.load(json_file)
-        imp_df['Cause']=imp_df['Key'].map(tech_data)
-
-        imp_df = imp_df[['Rule','Score','Cause','Failed','RGB']]
-        self._ppt.update_table(f'app{app_no}_imp_table',imp_df,include_index=False,background='RGB')
-
     def fill_critical_rules(self,app_id,app_no):
         self.info('Filling critical rules table')
         rules_df = self._aip_data.critical_rules(app_id)
@@ -590,47 +489,6 @@ class GeneratePPT(Logger):
             self._ppt.update_table(f'app{app_no}_top_violations',rule_summary_df,include_index=False)
         else:
             self.warning('This application contains no critical violations')
-        # if not rules_df.empty:
-        #     critical_rule_df = pd.json_normalize(rules_df['rulePattern'])
-        #     critical_rule_df = critical_rule_df[['name','critical']]
-
-        #     #pourcentage_iso5055 = critical_rule_df['name']
-        #     #self._ppt.replace_text(f'{{app{app_no}_ISO_5055}}',rule_summary_df)
-
-    def fill_violations(self,app_id,app_no):
-        self.info('Filling violation table')
-        violation_df = pd.DataFrame(self._aip_data.violation_sizing(app_id),index=[0])
-        violation_df['Violation Count']=pd.Series(["{0:,.0f}".format(val) for val in violation_df['Violation Count']])
-        violation_df[' per file']=pd.Series(["{0:,.2f}".format(val) for val in violation_df[' per file']])
-        violation_df[' per kLoC']=pd.Series(["{0:,.2f}".format(val) for val in violation_df[' per kLoC']])
-        violation_df['Complex objects']=pd.Series(["{0:,.0f}".format(val) for val in violation_df['Complex objects']])
-        violation_df[' With violations']=pd.Series(["{0:,.0f}".format(val) for val in violation_df[' With violations']])
-        self._ppt.update_table(f'app{app_no}_violation_sizing',violation_df.transpose())
-        self._ppt.replace_text(f'{{app{app_no}_critical_violations}}',violation_df['Violation Count'].loc[0])
-
-        #violation_df['Security']=pd.Series(["{0:,.0f}".format(val) for val in violation_df['Security']])
-        
-        #print('#########################################################################################')
-        #print('coucou le resultat est',violation_df['Security'])
-        #print('#########################################################################################')
-        ######################################################################
-
-        ##code added for is 5055
-        #pourcentage_iso5055 = violation_df[' per file'].sum()
-        #self._ppt.replace_text(f'{{app{app_no}_ISO_5055}}',violation_df['Violation Count'].sum())
-        ######################################################################################
-        
-
-    def fill_sizing(self,app_id,app_no):
-        self.info('Filling sizing table')
-        sizing_df = pd.DataFrame(self._aip_data.tech_sizing(app_id),index=[0])
-        sizing_df['LoC']=pd.Series(["{0:,.0f} K".format(val / 1000) for val in sizing_df['LoC']])
-        sizing_df['Files']=pd.Series(["{0:,.0f}".format(val) for val in sizing_df['Files']])
-        sizing_df['Classes']=pd.Series(["{0:,.0f}".format(val) for val in sizing_df['Classes']])
-        sizing_df['SQL Artifacts']=pd.Series(["{0:,.0f}".format(val) for val in sizing_df['SQL Artifacts']])
-        sizing_df['Tables']=pd.Series(["{0:,.0f}".format(val) for val in sizing_df['Tables']])
-        sizing_df = sizing_df.transpose()
-        self._ppt.update_table(f'app{app_no}_tech_sizing',sizing_df)
 
     def oss_risk_assessment(self,hl_id,app_no,day_rate):
         self.info('Filling OSS risk assessment table')
@@ -655,8 +513,10 @@ class GeneratePPT(Logger):
         oss_med.replace_text(self._ppt,app_no)
 
         self._ppt.replace_text(f'{{app{app_no}_oss_cmpn_tot}}',total_components)
+        oss_df = oss_df[(oss_df['critical']!='') | (oss_df['high']!='')]
         if not oss_df.empty:
-            self._ppt.update_table(f'app{app_no}_HL_table_CVEs',oss_df,include_index=False)
+            self._ppt.update_table(f'app{app_no}_hl_table_cve',oss_df,hl_id,
+            include_index=False)
 
         self.info('Filling OSS license table')
         '''
@@ -691,7 +551,7 @@ class GeneratePPT(Logger):
                 lic_summary.loc[lic_summary['risk']=='Medium','forground']='127,127,127'
 
                 #update the powerpoint table
-                self._ppt.update_table(f'app{app_no}_HL_table_lic_risks',lic_summary,include_index=False)
+                self._ppt.update_table(f'app{app_no}_hl_table_lic_risks',lic_summary,hl_id, include_index=False)
             
                 lic.high = lic_summary[lic_summary['risk']=='High']['comp count'].sum()
                 lic.medium = lic_summary[lic_summary['risk']=='Medium']['comp count'].sum()

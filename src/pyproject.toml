@@ -1,15 +1,19 @@
 [project]
 name='com.castsoftware.uc.arg'
 description="Assessment Report Generator (ARG)"
-version='1.6.0' #prod version
-dependencies = ['pandas', 'python-pptx==0.6.18', 'com.castsoftware.uc.python.common>=1.1.1', 'IPython', 'requests', 'Jinja2']
+version='1.7.0' #prod version
+authors= [
+    {name="Nevin Kaplan",email="n.kaplan@castsoftware.com"},
+    {name="DD Assessment Team",email="Team.ddassessments@castsoftware.com"}
+]
+readme="README.md"
+dependencies = ['pandas', 'python-pptx==0.6.18', 'com.castsoftware.uc.python.common>=1.1.7', 'IPython', 'requests', 'Jinja2','setuptools']
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: OS Independent",
 ]
 requires-python = ">=3.6"
-readme = "README.md"
 [project.urls]
-"Homepage" = "https://github.com/CAST-Extend/com.castsoftware.uc.arg"
-"Bug Tracker" = "https://github.com/CAST-Extend/com.castsoftware.uc.arg/issues"
+Homepage = "https://github.com/CAST-Extend/com.castsoftware.uc.arg"
+documentation="https://github.com/CAST-Extend/com.castsoftware.uc.arg/wiki"
