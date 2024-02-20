@@ -106,7 +106,7 @@ class ActionPlan(AipRestCall):
             ap_table = ap_table.drop(columns=['comment','tag','Technical Criteria','Days Effort','Cost Est.','Eff Hours'])
 
             try:
-                self._ppt.update_table(f'app{app_no}_action_plan',ap_table.head(29),include_index=False,background='RGB')
+                self._ppt.update_table(f'app{app_no}_action_plan',ap_table.head(29),app_id,include_index=False,background='RGB')
             except ValueError as ex:
                 self._log.warning('Action plan table missing from tamplate')
                 

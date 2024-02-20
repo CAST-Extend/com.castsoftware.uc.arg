@@ -40,7 +40,7 @@ class StrengthImprovment(MRIPage):
         imp_df['Cause']=imp_df['Key'].map(tech_data)
 
         imp_df = imp_df[['Rule','Score','Cause','Failed','RGB']]
-        PowerPoint.ppt.update_table(f'app{app_no}_imp_table',imp_df,include_index=False,background='RGB')
+        PowerPoint.ppt.update_table(f'app{app_no}_imp_table',imp_df,app_name,include_index=False,background='RGB')
 
 
     pass

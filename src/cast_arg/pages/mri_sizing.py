@@ -32,7 +32,7 @@ class MRISizing(MRIPage):
             self.ppt.replace_text(f'{{app{app_no}_comment_out_pct}}',percent_comment_out)
 
             loc_tbl['percent']=Series(["{0:.2f}%".format(val) for val in loc_tbl['percent']], index = loc_tbl.index)
-            self.ppt.update_table(f'app{app_no}_loc_table',loc_tbl,header_rows=0)
+            self.ppt.update_table(f'app{app_no}_loc_table',loc_tbl,app_name,header_rows=0)
             self.ppt.update_chart(f'app{app_no}_loc_pie_chart',DataFrame(loc_tbl['loc']))
 
             # self._ppt.replace_grade(grade_all,app_no)
@@ -51,7 +51,7 @@ class MRISizing(MRIPage):
         sizing_df['SQL Artifacts']=Series(["{0:,.0f}".format(val) for val in sizing_df['SQL Artifacts']])
         sizing_df['Tables']=Series(["{0:,.0f}".format(val) for val in sizing_df['Tables']])
         sizing_df = sizing_df.transpose()
-        self._ppt.update_table(f'app{app_no}_tech_sizing',sizing_df)
+        self._ppt.update_table(f'app{app_no}_tech_sizing',sizing_df,app_name)
 
     def violations_table(self,app_id,app_no):
         self._log.info('Filling critical violation table')
@@ -61,7 +61,7 @@ class MRISizing(MRIPage):
         violation_df[' per kLoC']=Series(["{0:,.2f}".format(val) for val in violation_df[' per kLoC']])
         violation_df['Complex objects']=Series(["{0:,.0f}".format(val) for val in violation_df['Complex objects']])
         violation_df[' With violations']=Series(["{0:,.0f}".format(val) for val in violation_df[' With violations']])
-        self._ppt.update_table(f'app{app_no}_violation_sizing',violation_df.transpose())
+        self._ppt.update_table(f'app{app_no}_violation_sizing',violation_df.transpose(),app_id)
         self._ppt.replace_text(f'{{app{app_no}_critical_violations}}',violation_df['Violation Count'].loc[0])
 
     def sizing_pie_chart(self,app_id,app_no):

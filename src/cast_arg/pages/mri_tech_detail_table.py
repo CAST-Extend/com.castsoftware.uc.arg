@@ -56,7 +56,7 @@ class TechDetailTable(MRIPage):
 
         # sizing_df=sizing_df[['Number of Code Lines','Fix Now','Near Term','Mid Term','Long Term','Critical Violations']]
         sizing_df['Number of Code Lines'] = sizing_df['Number of Code Lines'].map('{:,.0f}'.format)
-        PowerPoint.ppt.update_table(f'app{app_no}_technical_details_table',sizing_df,header_rows=2)
+        PowerPoint.ppt.update_table(f'app{app_no}_technical_details_table',sizing_df,app_name,header_rows=2)
 
     def _get_counts(self,data:DataFrame,priority:str,tech:str) -> int:
         t = tech.replace('+',r'\+').lower()

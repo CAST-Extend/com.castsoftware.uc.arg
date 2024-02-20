@@ -286,7 +286,7 @@ class GeneratePPT(Logger):
                     doc_df.sort_values(by=['Score','Rule'], inplace=True)
                     doc_df['RGB'] = np.where(doc_df.Score >= 3,'194,236,213',np.where(doc_df.Score < 2,'255,210,210','255,240,194'))
                     doc_df.Score = doc_df.Score.map('{:.2f}'.format)
-                    self._ppt.update_table(f'app{app_no}_doc_table',doc_df,include_index=False,background='RGB')
+                    self._ppt.update_table(f'app{app_no}_doc_table',doc_df,app_id,include_index=False,background='RGB')
                     self.fill_critical_rules(app_id,app_no)
 
                     """
@@ -328,7 +328,7 @@ class GeneratePPT(Logger):
                     if not iso_df.empty:
                         iso_df.loc[iso_df['violation']=='','background']='205,218,226'
                         iso_df.loc[iso_df['violation']!='','background']='255,255,255'
-                        self._ppt.update_table(f'app{app_no}_iso5055',iso_df,
+                        self._ppt.update_table(f'app{app_no}_iso5055',iso_df,app_id,
                                             include_index=False,background='background')
                                        
                         pourcentage_iso5055 = iso_df["count"].sum()
@@ -486,7 +486,7 @@ class GeneratePPT(Logger):
             rules_df = rules_df[['rulePattern.name','rulePattern.critical']]
             rule_summary_df=rules_df.groupby(['rulePattern.name']).size().reset_index(name='counts').sort_values(by=['counts'],ascending=False)
             rule_summary_df=rule_summary_df.head(5)
-            self._ppt.update_table(f'app{app_no}_top_violations',rule_summary_df,include_index=False)
+            self._ppt.update_table(f'app{app_no}_top_violations',rule_summary_df,app_id,include_index=False)
         else:
             self.warning('This application contains no critical violations')
 
@@ -515,8 +515,7 @@ class GeneratePPT(Logger):
         self._ppt.replace_text(f'{{app{app_no}_oss_cmpn_tot}}',total_components)
         oss_df = oss_df[(oss_df['critical']!='') | (oss_df['high']!='')]
         if not oss_df.empty:
-            self._ppt.update_table(f'app{app_no}_hl_table_cve',oss_df,hl_id,
-            include_index=False)
+            self._ppt.update_table(f'app{app_no}_hl_table_cve',oss_df,hl_id,include_index=False)
 
         self.info('Filling OSS license table')
         '''
