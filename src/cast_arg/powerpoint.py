@@ -67,7 +67,9 @@ class PowerPoint(common_ppt):
                 raise ex
 
 
-    def update_table(self,name,data:DataFrame, app:str, include_index=True,interactive:bool=False):
+    def update_table(self,name,data:DataFrame, app:str, 
+                     include_index=True,interactive:bool=False,
+                     header_rows=1,background=None,forground=None):
         self.log.info(f'Updating table {name}')
 
         """
@@ -93,7 +95,11 @@ class PowerPoint(common_ppt):
 
         #work on main table
         while True:
-            super().update_table(name,data,max_rows=last_row,include_index=include_index)
+            super().update_table(name,data,max_rows=last_row,
+                                 include_index=include_index,
+                                 header_rows=header_rows,
+                                 background=background,
+                                 forground=forground)
             if interactive:
                 self.log.info(f'Deck {name} table for application {app} has been updated.')
                 if rsp := numeric_response(f'The current row number of lines is {last_row}, enter a new value or RETURN to accept',last_row,len(data)):
@@ -106,7 +112,7 @@ class PowerPoint(common_ppt):
             else:
                 break
             
-        self.replace_text(f'{{name}}',last_row)
+        self.replace_text(f'{{{name}}}',last_row)
 
         #now do spillover table
         try:
@@ -116,11 +122,12 @@ class PowerPoint(common_ppt):
             if table_shape is None:
                 raise ValueError(f'Table not found in template: {spill_name}')
 
-            super().update_table(spill_name,spill_data,max_rows=len(spill_data),include_index=include_index)
+            super().update_table(spill_name,spill_data,max_rows=len(spill_data),
+                                 include_index=include_index,header_rows=header_rows,
+                                 background=background,forground=forground)
         except ValueError as ve:
             self.log.warning(ve)
 
-        self.save()
         pass
 
     def replace_risk_factor(self, grades:Series, app_no:int=0, search_str:str=None):

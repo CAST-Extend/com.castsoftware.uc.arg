@@ -140,12 +140,14 @@ class HighlightSummary(Highlight):
         if oss_cve_df.empty:
             oss_crit_vio_total = 0
         else:
-            oss_crit_vio_total = len(oss_cve_df[0].unique())
+            try:
+                oss_crit_vio_total = len(oss_cve_df[0].unique())
+            except KeyError:
+                oss_crit_vio_total = 0
+
         self.replace_text('critical_cve_total',f'{oss_crit_vio_total:,}')
         self.replace_text('high_license_total',f'{t_high_license:,}')
         self.replace_text('oss_effort',ceil(oss_crit_vio_total/2))
-
-
 
         # cloud_hml = self.get_get_cloud_hml(score=t_cloud)
         # if cloud_hml == 'high':
