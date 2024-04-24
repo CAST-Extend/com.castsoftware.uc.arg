@@ -40,7 +40,7 @@ class MRISizing(MRIPage):
             self.sizing_table(app_name,app_no)
             self.violations_table(app_name,app_no)
 
-        self.sizing_pie_chart(app_name,app_no)
+        # self.sizing_pie_chart(app_name,app_no)
 
     def sizing_table(self,app_name:str,app_no:int):
         self._log.info('Filling technical sizing table')
@@ -64,14 +64,18 @@ class MRISizing(MRIPage):
         self._ppt.update_table(f'app{app_no}_violation_sizing',violation_df.transpose(),app_id)
         self._ppt.replace_text(f'{{app{app_no}_critical_violations}}',violation_df['Violation Count'].loc[0])
 
-    def sizing_pie_chart(self,app_id,app_no):
-        self._log.info('Filling sizing pie chart')
-        grade_by_tech_df = self.get_grade_by_tech(app_id)
-        if not grade_by_tech_df.empty:
-            #add appmarq technology
-            self._ppt.replace_text(f'{{app{app_no}_largest_tech}}',grade_by_tech_df.index[0])
+    # def sizing_pie_chart(self,app_id,app_no):
+    #     self._log.info('Filling sizing pie chart')
+    #     grade_by_tech_df = self.get_grade_by_tech(app_id)
+    #     if not grade_by_tech_df.empty:
+    #         #add appmarq technology
+    #         self._ppt.replace_text(f'{{app{app_no}_largest_tech}}',grade_by_tech_df.index[0])
 
-            self._log.info('Filling Technical Overview')
-            # Technical Overview - Lines of code by technology GRAPH
-            self._ppt.update_chart(f'app{app_no}_sizing_pie_chart',DataFrame(grade_by_tech_df['LOC']))
+    #         self._log.info('Filling Technical Overview')
+    #         # Technical Overview - Lines of code by technology GRAPH
+
+    #         loc_df = DataFrame(grade_by_tech_df['LOC'])
+    #         loc_df=loc_df.reset_index()
+    #         loc_df=loc_df[loc_df['LOC'].str.replace('[^0-9]', '', regex=True).astype('int64')>0]
+    #         self._ppt.update_chart(f'app{app_no}_sizing_pie_chart',loc_df)
 

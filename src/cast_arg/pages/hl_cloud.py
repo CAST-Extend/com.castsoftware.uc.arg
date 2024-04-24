@@ -14,28 +14,35 @@ class CloudMaturity(HLPage):
     def report(self,app:str,app_no:int) -> bool:
         status = True
         try:
-            self.prefix = f'app{app_no}'
-            self.slide = self.ppt.get_slide(self.ppt.get_shape_by_name(f'{self.prefix}_CloudTechPieChart'))
+            self.tag_prefix = f'app{app_no}'
+            self.slide = self.ppt.get_slide(self.ppt.get_shape_by_name(f'{self.tag_prefix}_CloudTechPieChart'))
             metrics = self._get_metrics(app)
 
-            self.ppt.replace_text(f'{{{self.prefix}_hl_CloudIndex}}',round(self._get_metrics(app)['cloudReady']*100,2),slide=self.slide)
+            self.replace_text('CloudIndex',round(self._get_metrics(app)['cloudReady']*100,1),shape=True,slide=self.slide)
 
             # get the cloud data from the Highlight REST API
             data = self.get_data(app)
             #export it to excel
             self.create_excel(app,data,self._output)
 
-            self.ppt.replace_text(f'{{{self.prefix}_hl_cloud_total_roadblocks}}',int(metrics['roadblocks']),slide=self.slide)
-            self.ppt.replace_text(f'{{{self.prefix}_hl_cloud_total_blockers}}',round(metrics['blockers']*100,1),slide=self.slide)
-            self.ppt.replace_text(f'{{{self.prefix}_hl_cloud_total_boosters}}',round(metrics['boosters']*100,1),slide=self.slide)
+            #this slide has tags that are both text embedded and shape named
+            for shape in [True,False]:
+                self.replace_text('cloud_total_roadblocks',int(metrics['roadblocks']),slide=self.slide,shape=shape)
+                self.replace_text('cloud_total_blockers',round(metrics['blockers']*100,1),slide=self.slide,shape=shape)
+                self.replace_text('cloud_total_boosters',round(metrics['boosters']*100,1),slide=self.slide,shape=shape)
+
+
+            # self.ppt.replace_text(f'{{{self.tag_prefix}_hl_cloud_total_roadblocks}}',int(metrics['roadblocks']),slide=self.slide)
+            # self.ppt.replace_text(f'{{{self.tag_prefix}_hl_cloud_total_blockers}}',round(metrics['blockers']*100,1),slide=self.slide)
+            # self.ppt.replace_text(f'{{{self.tag_prefix}_hl_cloud_total_boosters}}',round(metrics['boosters']*100,1),slide=self.slide)
             self.get_cloud_totals(data)
                 
             # update the techology chart
             agr = data[['Technology','NB Roadblocks']].groupby('Technology').aggregate('sum').reindex()
-            self.ppt.update_chart(f'{self.prefix}_CloudTechPieChart',agr)
+            self.ppt.update_chart(f'{self.tag_prefix}_CloudTechPieChart',agr)
 
             data = data.drop(columns=['Files'])
-            self.ppt.update_table(f'{self.prefix}_CloudDetailTable',data,app,include_index=False)  
+            self.ppt.update_table(f'{self.tag_prefix}_CloudDetailTable',data,app,include_index=False)  
             pass      
         except Exception as ex:
             ex_type, ex_value, ex_traceback = exc_info()
@@ -70,7 +77,7 @@ class CloudMaturity(HLPage):
         total_effort=round(total['Effort'],1)
         total_blockers=round(total['NB Roadblocks'],0)
 
-        self.ppt.replace_text(f'{{{self.prefix}_hl_cloud_total_effort}}',total_effort,slide=self.slide)
+        self.replace_text('cloud_total_effort',total_effort,slide=self.slide)
 
         #get the top tech and total occurences for it
         agr = data[['Technology','NB Roadblocks']]. \
@@ -80,11 +87,11 @@ class CloudMaturity(HLPage):
         agr.iloc[:1] # get the first row (top language)
         df = agr.iloc[:1]
 
-        self.ppt.replace_text(f'{{{self.prefix}_hl_cloud_top_tech}}',agr.index[0],slide=self.slide)
-        self.ppt.replace_text(f'{{{self.prefix}_hl_cloud_top_tech_total}}',int(agr['NB Roadblocks'].iloc[0]),slide=self.slide)
+        self.replace_text('cloud_top_tech',agr.index[0],slide=self.slide)
+        self.replace_text('cloud_top_tech_total',int(agr['NB Roadblocks'].iloc[0]),slide=self.slide)
 
         #len(data[data['']])
-        self.ppt.replace_text(f'{{{self.prefix}_hl_cloud_top_tech_total}}',int(agr['NB Roadblocks'].iloc[0]),slide=self.slide)
+        self.replace_text('cloud_top_tech_total',int(agr['NB Roadblocks'].iloc[0]),slide=self.slide)
 
 
     def create_excel(self,app_name:str,data:DataFrame,output:str):

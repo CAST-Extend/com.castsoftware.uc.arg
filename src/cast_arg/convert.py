@@ -9,10 +9,10 @@ from cast_arg.pages.hl_benchmark import HighlightBenchmark
 from cast_arg.pages.mri_strengh_improvement import StrengthImprovment
 from cast_arg.pages.mri_grades import MRIGrades
 from cast_arg.pages.mri_sizing import MRISizing
+from cast_arg.pages.mri_tech_detail_table import TechDetailTable
 
 from cast_arg.stats import OssStats,AIPStats,LicenseStats
 
-from cast_arg.pages.mri_tech_detail_table import TechDetailTable
 
 
 from cast_common.mri import MRI
@@ -88,14 +88,13 @@ class GeneratePPT(Logger):
             hl = Highlight(hl_base_url=config.hl_url,hl_user=config.hl_user,hl_pswd=config.hl_password, \
                            hl_instance=config.hl_instance,hl_apps=config.hl_list)
             self.hl_portfolio_pages = [
-                HighlightSummary(self.day_rate)
+                HighlightSummary(self.day_rate,self._config.output,ppt=self._ppt)
             ]
             self.hl_pages = [
-                CloudMaturity(self._config.output,ppt=self._ppt),
+                CloudMaturity(),
                 GreenIt(),
                 HighlightSummary(self.day_rate),
-                HighlightBenchmark(),
-
+                HighlightBenchmark()
             ]
             self._hl_data = HLData(config,log_level=config.logging_highlight)
 
@@ -111,8 +110,10 @@ class GeneratePPT(Logger):
         else:
             self._ppt.duplicate_slides(app_cnt)
             self._ppt.copy_block("each_app",["app"],app_cnt)
+            # self._ppt.save()
+            # return 
 
-        #self._ppt.replace_text("{app#_","{app1_")
+        self._ppt.replace_text("{app_per_page}","",tbd_for_blanks=False)
 
         self.expand_tables(config,['project_overview'])
         self.replace_all_text()
@@ -231,6 +232,10 @@ class GeneratePPT(Logger):
                 proc.report(hl_list)
 
         self._ppt.replace_text('{app_cnt}',app_cnt)
+
+        from inflect import engine
+        self._ppt.replace_text('{app_cnt_as_word}',engine().number_to_words(app_cnt))
+
         for idx in range(0,app_cnt):
             # create instance of action plan class 
             self.ap = ActionPlan (app_list,self._aip_data,self._ppt,self._config.output,day_rate)
@@ -249,19 +254,15 @@ class GeneratePPT(Logger):
             self.info(f'********************* Working on pages for {app_title} ******************************')
             self._ppt.replace_text(f'{{app{app_no}_name}}',app_title)
 
-            if self._config.aip_active:
-                for proc in self.mri_pages:
-                    self.info(f'Generating {proc.description}')
-                    proc.run(app_id,app_no)
-
-            if self._config.hl_active:
-                for proc in self.hl_pages:
-                    proc.report(hl_id,app_no)
 
             if self._config.aip_active:
                 if self._aip_data.has_data(app_id):
                     self.info('Preparing AIP Data')
-                    #self.info(f'Working on {app_id} ({self._appl_title[app_id]})')
+
+                    #Run MRI pages
+                    for proc in self.mri_pages:
+                        self.info(f'Generating {proc.description}')
+                        proc.run(app_id,app_no)
 
                     self.info('Filling risk factors for the executive summary page')
                     # do risk factors for the executive summary page
@@ -281,7 +282,7 @@ class GeneratePPT(Logger):
                         255,234,168 - Yellow shades
                         168,228,195 - Green shades
                     """
-                    doc_df = self._aip_data.doc_compliance(app_id)
+                    doc_df = self._aip_data.doc_compliance(app_id).copy()
                     doc_df.drop(columns=['Key','Total','Weight'],inplace=True) #'Detail',
                     doc_df.sort_values(by=['Score','Rule'], inplace=True)
                     doc_df['RGB'] = np.where(doc_df.Score >= 3,'194,236,213',np.where(doc_df.Score < 2,'255,210,210','255,240,194'))
@@ -326,19 +327,24 @@ class GeneratePPT(Logger):
                     """
                     iso_df = self._aip_data.iso_rules(app_id)
                     if not iso_df.empty:
-                        iso_df.loc[iso_df['violation']=='','background']='205,218,226'
-                        iso_df.loc[iso_df['violation']!='','background']='255,255,255'
-                        self._ppt.update_table(f'app{app_no}_iso5055',iso_df,app_id,
-                                            include_index=False,background='background')
-                                       
-                        pourcentage_iso5055 = iso_df["count"].sum()
-                        
-                        iso_Maintainaility = iso_df[iso_df.category == 'Maintainability' ]
-                        iso_MaintainailityCall = iso_Maintainaility["count"].sum()
-                        self._ppt.replace_text(f'{{app{app_no}_ISO_5055}}', round((iso_MaintainailityCall/(pourcentage_iso5055/2))*100,1))
-                    
+                        try:
+                            iso_df.loc[iso_df['violation']=='','background']='205,218,226'
+                            iso_df.loc[iso_df['violation']!='','background']='255,255,255'
+                            self._ppt.update_table(f'app{app_no}_iso5055',iso_df,app_id,
+                                                include_index=False,background='background')
+                                        
+                            pourcentage_iso5055 = iso_df["count"].sum()
+                            
+                            iso_Maintainaility = iso_df[iso_df.category == 'Maintainability' ]
+                            iso_MaintainailityCall = iso_Maintainaility["count"].sum()
+                            self._ppt.replace_text(f'{{app{app_no}_ISO_5055}}', round((iso_MaintainailityCall/(pourcentage_iso5055/2))*100,1))
+                        except ValueError as ex:
+                            self.warning(ex)                    
             #replaceHighlight application specific data
             if self._config.hl_active and self._hl_data.has_data(hl_id):
+                for proc in self.hl_pages:
+                    proc.report(hl_id,app_no)
+
                 try:
                     (oss_crit,oss_high,oss_med,lic,components) = self.oss_risk_assessment(hl_id,app_no,day_rate)
                     fix_now_total.add_effort(oss_crit.effort)
@@ -495,6 +501,7 @@ class GeneratePPT(Logger):
         lic_df=self._hl_data.get_lic_info(hl_id)
         lic_df=self._hl_data.sort_lic_info(lic_df)
         oss_df=self._hl_data.get_cve_info(hl_id)
+        lic = LicenseStats(logger_level=self._config.logging_generate)
         # lic_summary = pd.DataFrame(columns=['License Type','Risk Factor','Component Count','Example'])
 
         oss_crit = OssStats(hl_id,day_rate,self._hl_data,'crit',logger_level=self._config.logging_generate)
@@ -515,8 +522,11 @@ class GeneratePPT(Logger):
         self._ppt.replace_text(f'{{app{app_no}_oss_cmpn_tot}}',total_components)
         oss_df = oss_df[(oss_df['critical']!='') | (oss_df['high']!='')]
         if not oss_df.empty:
-            self._ppt.update_table(f'app{app_no}_hl_table_cve',oss_df,hl_id,include_index=False)
-
+            tbl_name = f'app{app_no}_hl_table_cve'
+            try:
+                self._ppt.update_table(tbl_name,oss_df,hl_id,include_index=False)
+            except ValueError as ex:
+                self.warning(ex)
         self.info('Filling OSS license table')
         '''
             License compliance table
@@ -543,14 +553,17 @@ class GeneratePPT(Logger):
             lic_summary=lic_summary[lic_summary["risk"].str.contains("Undefined")==False]
 
             # are there any records left?
-            lic = LicenseStats(logger_level=self._config.logging_generate)
             if not lic_summary.empty:
                 #modify the forground color
                 lic_summary.loc[lic_summary['risk']=='High','forground']='211,76,76'
                 lic_summary.loc[lic_summary['risk']=='Medium','forground']='127,127,127'
 
                 #update the powerpoint table
-                self._ppt.update_table(f'app{app_no}_hl_table_lic_risks',lic_summary,hl_id, include_index=False)
+                tbl_name = f'app{app_no}_hl_table_lic_risks'
+                try:
+                    self._ppt.update_table(tbl_name,lic_summary,hl_id, include_index=False)
+                except ValueError as ex:
+                    self.warning(ex)
             
                 lic.high = lic_summary[lic_summary['risk']=='High']['comp count'].sum()
                 lic.medium = lic_summary[lic_summary['risk']=='Medium']['comp count'].sum()
@@ -562,9 +575,7 @@ class GeneratePPT(Logger):
                 # self._ppt.replace_text(f'{{app{app_no}_med_lic_tot}}',
                 #     lic_summary[lic_summary['risk']=='Medium']['comp count'].sum())
 
-            lic.replace_text(self._ppt,app_no)
-        else:
-            lic = DataFrame()
+        lic.replace_text(self._ppt,app_no)
         return (oss_crit,oss_high,oss_med,lic,total_components)
 
 

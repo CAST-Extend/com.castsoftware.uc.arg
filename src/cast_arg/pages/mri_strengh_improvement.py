@@ -17,10 +17,9 @@ class StrengthImprovment(MRIPage):
             Populate the strengths and improvement page
             The necessary data is found in the loc_tbl
         """
-        imp_df = self.tqi_compliance(app_name)
+        imp_df = self.tqi_compliance(app_name).copy()
         imp_df.drop(columns=['Weight','Total','Succeeded','Compliance'],inplace=True)
         imp_df.sort_values(by=['Score','Rule'], inplace=True, ascending = False)
-
         file_name = f'{self._config.output}/health-{self._config.title_list[app_no-1]}.xlsx'
         writer = ExcelWriter(file_name, engine='xlsxwriter')
         format_table(writer,imp_df,'Health Data')
