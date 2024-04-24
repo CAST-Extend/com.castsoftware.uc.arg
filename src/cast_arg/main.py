@@ -20,6 +20,6 @@ if __name__ == '__main__':
     parser = ArgumentParser(description='Assessment Report Generation Tool')
     parser.add_argument('-c','--config', required=True, help='Configuration properties file')
     args = parser.parse_args()
-    ppt = GeneratePPT(Config(args.config))
-    ppt.save_ppt()
-
+    config=Config(args.config)
+    GeneratePPT(config)._ppt.save()
+    

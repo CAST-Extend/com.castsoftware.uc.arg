@@ -1,12 +1,41 @@
 from cast_common.powerpoint import PowerPoint as common_ppt
 from cast_common.logger import INFO
+from cast_arg.config import Config
 from pptx.chart.data import CategoryChartData
-from pandas import Series
+from pandas import Series,DataFrame
+from os.path import abspath
 
 __author__ = "Nevin Kaplan"
 __email__ = "n.kaplan@castsoftware.com"
 __copyright__ = "Copyright 2022, CAST Software"
 
+def yes_no_response(msg:str) -> bool:
+    while answer := input (f'{msg},  [Y or N]?'):
+        if answer.upper() == 'Y':
+            return True
+        elif answer.upper() == 'N':
+            return False
+        else:
+            continue
+
+def numeric_response(msg:str,value:int,max_rows) -> int:
+    msg_str=msg
+    while True:
+        first = True
+        answer = input(f'{msg_str}: ')
+        if len(answer)==0:
+            answer = f'{value}'
+        if answer.isnumeric():
+            answer = int(answer)
+            if answer > max_rows:
+                msg_str = f'{msg} [Too many rows, data contains {max_rows} rows]'
+                continue
+            return answer
+        else:
+                msg_str = f'{msg} [Input must be numberic]'
+                first = False
+            
+        
 
 class PowerPoint(common_ppt):
     """
@@ -18,8 +47,88 @@ class PowerPoint(common_ppt):
         common_ppt: PowerPoint class found in com.castsoftware.uc.python.common
     """
 
-    def __init__(self,template:str=None,output:str=None,log_level=INFO) -> None:
-        super().__init__(template,output,log_level)
+#    def __init__(self,template:str=None,output:str=None,log_level=INFO) -> None:
+    def __init__(self,config:Config,log_level=INFO) -> None:
+        super().__init__(config.template,config.output,log_level)
+        self._out = abspath(f"{config.output}/Project {config.project} - Tech DD Findings.pptx")        
+        self.config=config
+
+    def save(self):
+        while True:
+            try:
+                self._prs.save(self._out)
+                self.log.info(f'{self._out} saved.')
+                return 
+            except PermissionError as pe: 
+                if not yes_no_response(f'Error writing {self._out} powerpoint document, Retry'):
+                    return 
+            except Exception as ex:
+                self.log.error(f'General Exception while saving PowerPoint document: {ex}')
+                raise ex
+
+
+    def update_table(self,name,data:DataFrame, app:str, 
+                     include_index=True,interactive:bool=False,
+                     header_rows=1,background=None,forground=None):
+        self.log.info(f'Updating table {name}')
+
+        """
+            is there a tables entry in the config.json? if not add it now
+            check if the table name is in the config.json tables array
+                if not add it now
+            finally set a local variable to table
+        """
+        if name not in self.config.tables:
+            self.config.tables[name]={}
+        table = self.config.tables[name]
+            
+        table_shape = self.get_shape_by_name(name)
+        if table_shape is None:
+            raise ValueError(f'Table not found in template: {name}')
+
+        last_row = self.table_max_rows(table_shape)
+        if 'row' not in table:
+            table['row']=last_row
+            self.config.save()
+        elif last_row != table['row']:
+            last_row = table['row']
+
+        #work on main table
+        while True:
+            super().update_table(name,data,max_rows=last_row,
+                                 include_index=include_index,
+                                 header_rows=header_rows,
+                                 background=background,
+                                 forground=forground)
+            if interactive:
+                self.log.info(f'Deck {name} table for application {app} has been updated.')
+                if rsp := numeric_response(f'The current row number of lines is {last_row}, enter a new value or RETURN to accept',last_row,len(data)):
+                    if rsp == last_row:
+                        break
+                    last_row = rsp
+                if table['row']!=last_row:
+                    table['row']=last_row
+                    self.config.save()
+            else:
+                break
+            
+        self.replace_text(f'{{{name}}}',last_row)
+
+        #now do spillover table
+        try:
+            spill_data = data.iloc[last_row:]
+            spill_name = f'{name}_spill_1'
+            table_shape = self.get_shape_by_name(spill_name)
+            if table_shape is None:
+                raise ValueError(f'Table not found in template: {spill_name}')
+
+            super().update_table(spill_name,spill_data,max_rows=len(spill_data),
+                                 include_index=include_index,header_rows=header_rows,
+                                 background=background,forground=forground)
+        except ValueError as ve:
+            self.log.warning(ve)
+
+        pass
 
     def replace_risk_factor(self, grades:Series, app_no:int=0, search_str:str=None):
         if search_str == None:

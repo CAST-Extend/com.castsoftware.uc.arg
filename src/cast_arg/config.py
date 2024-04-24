@@ -4,7 +4,7 @@
 from cast_common.logger import Logger,DEBUG, INFO, WARN, ERROR
 from json import load
 from argparse import ArgumentParser
-from json import JSONDecodeError
+from json import JSONDecodeError,dump
 
 __author__ = "Nevin Kaplan"
 __copyright__ = "Copyright 2022, CAST Software"
@@ -23,7 +23,8 @@ class Config():
 
         #do all required fields contain data
         try:
-            with open(config, 'rb') as config_file:
+            self.config_name = config
+            with open(self.config_name, 'rb') as config_file:
                 self._config = load(config_file)
 
             #get logging configuration
@@ -82,6 +83,31 @@ class Config():
             msg = str(e)
             self.log.error(msg)
             exit()
+        except FileNotFoundError as e:
+            self.log=Logger('config',INFO)
+            self.log.error(f'Configuration file not found {config}')
+            exit()
+    
+    def save(self):
+        try:
+            logging = self._config['logging']
+
+            #put the logging values back into human readable format
+            for idx,value in enumerate(logging):
+                logging[value]=list(self.log_translate.keys()) [list(self.log_translate.values()).index(logging[value])]
+                pass
+
+            with open(self.config_name, "w") as f:
+                dump(self._config, f,indent=4)
+
+            # convert the entries into something the logger can understand
+            for idx,value in enumerate(logging):
+                logging[value]=self.log_translate[logging[value]]
+
+            return True
+        except Exception as ex:
+            self.log.error(f'Error saving configuration file {ex}')
+            return False
 
     def __rest_settings(self,dict):
         for v in ["Active","URL","user","password"]:
@@ -157,20 +183,32 @@ class Config():
         return self._config['rest']
 
     @property
-    def aip_active(self):
-        return self.rest['AIP']['Active']
+    def aip(self):
+        return self.rest['AIP']
 
     @property
-    def aip_url(self):
-        return self.rest['AIP']['URL']
+    def aip_active(self) -> bool:
+        return self.aip['Active']
+    
+    @property
+    def aip_token(self) -> bool:
+        key = 'Token'
+        if key not in self.aip:
+            return False
+        else:
+            return self.aip[key]
 
     @property
-    def aip_user(self):
-        return self.rest['AIP']['user']
+    def aip_url(self) -> str:
+        return self.aip['URL']
 
     @property
-    def aip_password(self):
-        return self.rest['AIP']['password']
+    def aip_user(self) -> str:
+        return self.aip['user']
+
+    @property
+    def aip_password(self) -> str:
+        return self.aip['password']
 
     @property
     def hl_active(self):
@@ -192,6 +230,12 @@ class Config():
     def hl_instance(self):
         return self.rest['Highlight']['instance']
 
+    @property
+    def tables(self):
+        if not 'tables' in self._config:
+            self._config['tables'] = {}
+        return self._config['tables']
+    
 
 
 

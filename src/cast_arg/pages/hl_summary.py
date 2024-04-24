@@ -39,10 +39,14 @@ class HighlightSummary(Highlight):
         oss_cve_counts={}
         t_scores = self.calc_scores(app_name)
 
+        scores = {}
+
         for app in app_name:
             df = self.get_technology(app)
             tech_df = concat([tech_df,df])
             #
+
+            scores[app] = self.calc_scores([app])
 
             t_high_license += len(self.get_license_high(app))
             t_medium_license += len(self.get_license_medium(app))
@@ -56,9 +60,10 @@ class HighlightSummary(Highlight):
             comp_total += self.get_component_total(app)
 #            oss_score = self.get_software_oss_safty_score(app) 
             cve_df=self.get_cve_critical(app)
-            oss_cve_counts[app]=len(cve_df['cve'].unique()) 
-            cve_df=cve_df['cve']
-            oss_cve_df = concat([oss_cve_df,cve_df])
+            if cve_df is not None:
+                oss_cve_counts[app]=len(cve_df['cve'].unique()) 
+                cve_df=cve_df['cve']
+                oss_cve_df = concat([oss_cve_df,cve_df])
 
             df = self.get_cloud_detail(app)
             df = df[df['cloudRequirement.criticality'].isin(['Critical','High'])] 
@@ -68,10 +73,13 @@ class HighlightSummary(Highlight):
             pass
 
         text = {
-            'quality':{'high':'high','medium':'medium','low':'low'},
+            'quality':{'high':'high','medium':'moderate','low':'low-level'},
+            'improvement':{'high':'no immediate action required','medium':'room for improvement','low':'ample opportunity for improvement'},
+            'maintain':{'high':'highly maintainable','medium':'maintainable but needs improvement','low':'is not maintainable'},
+
             'quality_alt_1':{'high':'well','medium':'fair','low':'bad'},
             'quality_alt_2':{'high':'impressive','medium':'fair','low':'poor'},
-            'quality_alt_3':{'high':'stands out','medium':'average','low':'in need of improvment'},
+            'quality_alt_3':{'high':'stands out','medium':'average','low':'in need of improvement'},
             'maturity':{'high':'high','medium':'medium','low':'low'},
             'effort':{'high':'minimal','medium':'medium','low':'considerable'},
             'risk':{'high':'low amount of','medium':'average','low':'very high'}
@@ -81,6 +89,17 @@ class HighlightSummary(Highlight):
         for key in self.grades:
             score = t_scores[key] 
             self.replace_text(f'{key}_score',score)
+
+            # calculate the "BEST" and "WORST" grades for each tile
+            high=0
+            low = 100
+            for app in app_name:
+                a = scores[app]
+                g = a[key]
+                if g < low: low = g
+                if g > high: high = g
+            PowerPoint.ppt.replace_text(f'{{bm_worst_{key}_score}}',low)
+            PowerPoint.ppt.replace_text(f'{{bm_best_{key}_score}}',high)
 
             threshold = self.grades[key]['threshold']
             if len(threshold)>1:
@@ -118,12 +137,17 @@ class HighlightSummary(Highlight):
         self.replace_text('oss_total_components',f'{comp_total:,}')
         self.replace_text('oss_total_licenses',f'{t_license:,}')
 
-        oss_crit_vio_total = len(oss_cve_df[0].unique())
+        if oss_cve_df.empty:
+            oss_crit_vio_total = 0
+        else:
+            try:
+                oss_crit_vio_total = len(oss_cve_df[0].unique())
+            except KeyError:
+                oss_crit_vio_total = 0
+
         self.replace_text('critical_cve_total',f'{oss_crit_vio_total:,}')
         self.replace_text('high_license_total',f'{t_high_license:,}')
         self.replace_text('oss_effort',ceil(oss_crit_vio_total/2))
-
-
 
         # cloud_hml = self.get_get_cloud_hml(score=t_cloud)
         # if cloud_hml == 'high':
@@ -165,6 +189,8 @@ class HighlightSummary(Highlight):
             self.replace_text('oss_high_critical_total',oss_high_crit_total)
 
     def _get_high_low_factors(self,factor:list):
+        if len(factor)==0:
+            return (0,0,0,0)
         low_app = min(factor, key=factor.get)
         low_score = round(factor[low_app],1)
         high_app = max(factor, key=factor.get)
