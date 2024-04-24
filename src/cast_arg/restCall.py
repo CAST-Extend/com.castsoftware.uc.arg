@@ -170,7 +170,7 @@ class AipData(AipRestCall):
 
     def _get_iso_rules(self,domain_id,snapshot_id):
         iso={1061004:"Security",
-             1061003:"Reliabllity",
+             1061003:"Reliability",
              1061002:"Performance-Efficiency",
              1061001:"Maintainability",
         }

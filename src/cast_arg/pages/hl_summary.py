@@ -1,5 +1,5 @@
-
 from cast_common.highlight import Highlight
+from cast_arg.pages.hl_report import HLPage
 from cast_common.logger import Logger, INFO,DEBUG
 from cast_common.powerpoint import PowerPoint
 from cast_common.util import list_to_text,convert_LOC
@@ -9,13 +9,12 @@ from math import ceil
 from pandas import json_normalize
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
-class HighlightSummary(Highlight):
+class HighlightSummary(HLPage):
 
-    def __init__(self,day_rate:int):
-        super().__init__()
+    def __init__(self,day_rate:int,output:str=None,ppt:PowerPoint=None):
+        super().__init__(output=output,ppt=ppt)
         self._day_rate = day_rate
         pass        
-
 
     def report(self,app_name:str|list=None,app_no:int=0) -> bool:
         if type(app_name) is list:
@@ -23,13 +22,11 @@ class HighlightSummary(Highlight):
         else:
             self.tag_prefix = f'app{app_no}'
             app_name = [app_name]
-        self.tag_prefix = f'{self.tag_prefix}_hl'
-
 
         #create list of technolgies sorted by LOC in decending order
         tech_df = DataFrame()
         comp_total = 0
-        oss_cve_df = DataFrame()
+        # oss_cve_df = DataFrame()
         cloud_df = DataFrame()
         green_df = DataFrame()
 
@@ -41,6 +38,9 @@ class HighlightSummary(Highlight):
 
         scores = {}
 
+        oss={}
+        oss['cve']={}
+        oss['license']={}
         for app in app_name:
             df = self.get_technology(app)
             tech_df = concat([tech_df,df])
@@ -58,12 +58,25 @@ class HighlightSummary(Highlight):
             low_health[app]=health # save the health score for ranking
             
             comp_total += self.get_component_total(app)
-#            oss_score = self.get_software_oss_safty_score(app) 
-            cve_df=self.get_cve_critical(app)
-            if cve_df is not None:
-                oss_cve_counts[app]=len(cve_df['cve'].unique()) 
-                cve_df=cve_df['cve']
-                oss_cve_df = concat([oss_cve_df,cve_df])
+#            oss_score += self.get_software_oss_safty_score(app) 
+
+            """
+                get the Common Vulnerabilty and Exposue information by priority
+                
+                The highlight class has three methods get_cve_critical, get_cve_high
+                and get_cve_medum. (we don't care about the low priority items). Use 
+                them to retrieve the information and store it in a dictionary for later 
+                use.
+            """
+            for crit in ['critical','high','medium']:
+                mth = getattr(self,f'get_cve_{crit}')
+                df = mth(app)
+                if df is not None:
+                    if crit in oss['cve'].keys():
+                        oss['cve'][crit] = concat([oss['cve'][crit],df])
+                    else: 
+                        oss['cve'][crit] = df
+            pass
 
             df = self.get_cloud_detail(app)
             df = df[df['cloudRequirement.criticality'].isin(['Critical','High'])] 
@@ -88,7 +101,7 @@ class HighlightSummary(Highlight):
         t_apps = len(app_name)
         for key in self.grades:
             score = t_scores[key] 
-            self.replace_text(f'{key}_score',score)
+            self.replace_text(f'{key}_score',score,shape=True)
 
             # calculate the "BEST" and "WORST" grades for each tile
             high=0
@@ -98,26 +111,76 @@ class HighlightSummary(Highlight):
                 g = a[key]
                 if g < low: low = g
                 if g > high: high = g
-            PowerPoint.ppt.replace_text(f'{{bm_worst_{key}_score}}',low)
-            PowerPoint.ppt.replace_text(f'{{bm_best_{key}_score}}',high)
 
-            threshold = self.grades[key]['threshold']
-            if len(threshold)>1:
-                if score < threshold[0]:
-                    hml = 'low'
-                elif score > threshold[1]:
-                    hml = 'high'
-                else:
-                    hml = 'medium'
-                color = self.get_hml_color(hml)
-                PowerPoint.ppt.fill_text_box_color(f'{self.tag_prefix}_{key}_tile',color)
+            self.replace_text(f'bmw_{key}_score',low,shape=True)
+            self.replace_text(f'bmb_{key}_score',high,shape=True)
+            self.replace_text(f'bmi_{key}_score',round(self._benchmark.loc[key]['avg']*100,2),shape=True)
 
-                for t in text:
-                    self.replace_text(f'{key}_{t}',text[t][hml])
+            # is this grade score above, below or equal to the industry average?
+            bm = round(Highlight._benchmark.loc[key]['avg']*100,2)
+            score_bm_hml = 'equal'
+            if score > bm:
+                score_bm_hml = 'high'
+            elif score < bm: 
+                score_bm_hml = 'low'
+            self.replace_text(f'{key}_bm_hle',score_bm_hml)
+
+            if key == 'openSourceSafety':
+                hml_risk = self.get_get_software_oss_risk(score=score)
+                self.replace_text(f'{key}_hml_risk',hml)
+                self.replace_text(f'{key}_risk',hml)
+
+                hml_score={'high':'low','medium':'medium','low':'high'}
+                self.replace_text(f'{key}_hml_score',hml_score[hml_risk])
+
+                total_cves = 0
+                total_cmpnts_df = DataFrame(columns=['component'])
+                for key in oss['cve'].keys():
+                    eff = 0
+                    cmpnt_df=DataFrame()
+                    df = oss['cve'][key]
+                    if df is not None:
+                        cmpnt_df['component']=df['component']
+                        if not cmpnt_df.empty:
+                            total_cmpnts_df = concat([cmpnt_df,total_cmpnts_df])
+                            eff = ceil(len(cmpnt_df['component'].unique())/2)
+                        cnt = len(df['cve'].unique())
+                        total_cves += cnt
+
+                    self.replace_text(f'{key}_cve_total',cnt)
+                    self.replace_text(f'{key}_cve_effort',eff)
+                    pass
+    
+                self.replace_text('cve_total',total_cves)
+                total_eff = 0
+                if not total_cmpnts_df.empty:
+                    total_eff = ceil(len(total_cmpnts_df['component'].unique())/2)
+                    self.replace_text(f'{key}_total_cve_effort',total_eff)
 
 
-        # oss_risk = self.get_get_software_oss_risk(score=metrics['openSourceSafety'])
-        # self.replace_text('oss_risk',oss_risk)
+                
+                self.replace_text('high_license_total',f'{t_high_license:,}')
+                self.replace_text('oss_effort',ceil(total_cves/2))
+                
+
+
+                # oss_cve_counts[app]=len(cve_df['cve'].unique()) 
+                # cve_df=cve_df['cve']
+                # oss_cve_df = concat([oss_cve_df,cve_df])
+            else:
+                threshold = self.grades[key]['threshold']
+                if len(threshold)>1:
+                    if score < threshold[0]:
+                        hml = 'low'
+                    elif score > threshold[1]:
+                        hml = 'high'
+                    else:
+                        hml = 'medium'
+                    color = self.get_hml_color(hml)
+                    PowerPoint.ppt.fill_text_box_color(f'{self.tag_prefix}_{key}_tile',color)
+
+                    for t in text:
+                        self.replace_text(f'{key}_{t}',text[t][hml])
 
         self.replace_text('app_count',t_apps)
 
@@ -137,26 +200,13 @@ class HighlightSummary(Highlight):
         self.replace_text('oss_total_components',f'{comp_total:,}')
         self.replace_text('oss_total_licenses',f'{t_license:,}')
 
-        if oss_cve_df.empty:
-            oss_crit_vio_total = 0
-        else:
-            try:
-                oss_crit_vio_total = len(oss_cve_df[0].unique())
-            except KeyError:
-                oss_crit_vio_total = 0
-
-        self.replace_text('critical_cve_total',f'{oss_crit_vio_total:,}')
-        self.replace_text('high_license_total',f'{t_high_license:,}')
-        self.replace_text('oss_effort',ceil(oss_crit_vio_total/2))
-
-        # cloud_hml = self.get_get_cloud_hml(score=t_cloud)
-        # if cloud_hml == 'high':
-        #     cloud_eff_lvl = 'minimal'
-        # elif cloud_hml == 'medium':
-        #     cloud_eff_lvl = 'some'
-        # else: 
-        #     cloud_eff_lvl = 'good amount of'
-        # self.replace_text('cloud_effort_level',cloud_eff_lvl)
+        # if oss_cve_df.empty:
+        #     oss_crit_vio_total = 0
+        # else:
+        #     try:
+        #         oss_crit_vio_total = len(oss_cve_df[0].unique())
+        #     except KeyError:
+        #         oss_crit_vio_total = 0
         
         boosters = len(cloud_df[cloud_df['cloudRequirement.ruleType']=='BOOSTER'])
         blockers = len(cloud_df[cloud_df['cloudRequirement.ruleType']=='BLOCKER'])
@@ -197,10 +247,6 @@ class HighlightSummary(Highlight):
         high_score = round(factor[high_app],1)
         return (low_app,low_score,high_app,high_score)
 
-    def replace_text(self, item, data):
-        tag = f'{{{self.tag_prefix}_{item}}}'
-        self.log.debug(f'{tag}: {data}')
-        PowerPoint.ppt.replace_text(tag,data)
 
 # from os.path import abspath
 # from cast_common.util import format_table

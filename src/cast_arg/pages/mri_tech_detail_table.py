@@ -41,22 +41,32 @@ class TechDetailTable(MRIPage):
         else:
             for key, value in sizing_df.iterrows():
                 if key=='All':
-                    sizing_df.at[key,'Fix Now'] = len(ap_df[ap_df['Action Plan Priority']=='Fix Now'])
-                    sizing_df.at[key,'Near Term'] = len(ap_df[ap_df['Action Plan Priority']=='Near Term'])
-                    sizing_df.at[key,'Mid Term'] = len(ap_df[ap_df['Action Plan Priority']=='Mid Term'])
-                    # sizing_df.at[key,'Long Term'] = len(ap_df[ap_df['Action Plan Priority']=='Long Term'])
+                    sizing_df.at[key,'Fix Now'] = len(ap_df[ap_df['Action Plan Priority']=='Fix-Now'])
+                    sizing_df.at[key,'Near Term'] = len(ap_df[ap_df['Action Plan Priority']=='Near-Term'])
+                    sizing_df.at[key,'Mid Term'] = len(ap_df[ap_df['Action Plan Priority']=='Mid-Term'])
+                    # sizing_df.at[key,'Long Term'] = len(ap_df[ap_df['Action Plan Priority']=='Long-Term'])
                 else:
-                    sizing_df.at[key,'Fix Now'] = self._get_counts(ap_df,'Fix Now',key)
-                    sizing_df.at[key,'Near Term'] = self._get_counts(ap_df,'Near Term',key)
-                    sizing_df.at[key,'Mid Term'] = self._get_counts(ap_df,'Mid Term',key)
-                    # sizing_df.at[key,'Long Term'] = self._get_counts(ap_df,'Long Term',key)
+                    sizing_df.at[key,'Fix Now'] = self._get_counts(ap_df,'Fix-Now',key)
+                    sizing_df.at[key,'Near Term'] = self._get_counts(ap_df,'Near-Term',key)
+                    sizing_df.at[key,'Mid Term'] = self._get_counts(ap_df,'Mid-Term',key)
+                    # sizing_df.at[key,'Long Term'] = self._get_counts(ap_df,'Long-Term',key)
                 pass
 
         sizing_df = sizing_df.astype('int')
 
         # sizing_df=sizing_df[['Number of Code Lines','Fix Now','Near Term','Mid Term','Long Term','Critical Violations']]
+        # sizing_df.drop(columns=['Critical Violations'],inplace=True)
+        sizing_df=sizing_df[sizing_df['Number of Code Lines']>0]
+        sizing_df.sort_values(by=['Number of Code Lines'],ascending=False,inplace=True)
+
+        loc_df = DataFrame(sizing_df['Number of Code Lines'])
+
         sizing_df['Number of Code Lines'] = sizing_df['Number of Code Lines'].map('{:,.0f}'.format)
-        PowerPoint.ppt.update_table(f'app{app_no}_technical_details_table',sizing_df,app_name,header_rows=2)
+        self.ppt.update_table(f'app{app_no}_technical_details_table',sizing_df,app_name,header_rows=2)
+
+        # loc_df=loc_df.reset_index()
+        loc_df=loc_df[loc_df.index!='All']
+        self._ppt.update_chart(f'app{app_no}_sizing_pie_chart',loc_df)        
 
     def _get_counts(self,data:DataFrame,priority:str,tech:str) -> int:
         t = tech.replace('+',r'\+').lower()

@@ -1,13 +1,13 @@
 [project]
 name='com.castsoftware.uc.arg'
 description="Assessment Report Generator (ARG)"
-version='1.7.0' #prod version
+version='1.7.3' #prod version
 authors= [
     {name="Nevin Kaplan",email="n.kaplan@castsoftware.com"},
     {name="DD Assessment Team",email="Team.ddassessments@castsoftware.com"}
 ]
 readme="README.md"
-dependencies = ['pandas', 'python-pptx==0.6.18', 'com.castsoftware.uc.python.common>=1.1.8', 'IPython', 'requests', 'Jinja2','setuptools']
+dependencies = ['pandas', 'python-pptx==0.6.19', 'com.castsoftware.uc.python.common>=1.1.11', 'IPython', 'requests', 'Jinja2','setuptools','inflect']
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
