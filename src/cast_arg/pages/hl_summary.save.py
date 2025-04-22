@@ -1,5 +1,5 @@
 from cast_common.highlight import Highlight
-from cast_arg.pages.hl_report import HLPage
+from pages.hl_report import HLPage
 from cast_common.logger import Logger, INFO,DEBUG
 from cast_common.powerpoint import PowerPoint
 from cast_common.util import list_to_text,convert_LOC

@@ -1,5 +1,5 @@
 from cast_common.highlight import Highlight
-from cast_arg.powerpoint import PowerPoint
+from powerpoint import PowerPoint
 from cast_common.logger import Logger,INFO
 from pandas import DataFrame
 from json import load,JSONDecodeError

@@ -1,5 +1,5 @@
-from cast_arg.restCall import AipData
-from cast_arg.powerpoint import PowerPoint
+from restCall import AipData
+from powerpoint import PowerPoint
 from cast_common.logger import Logger,DEBUG,INFO
 
 

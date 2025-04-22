@@ -1,7 +1,7 @@
 from cast_common.powerpoint import PowerPoint as common_ppt
 from cast_common.util import yes_no_input
 from cast_common.logger import INFO
-from cast_arg.config import Config
+from config import Config
 from pptx.chart.data import CategoryChartData
 from pandas import Series,DataFrame
 from os.path import abspath

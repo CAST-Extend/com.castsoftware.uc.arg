@@ -1,4 +1,4 @@
-from cast_arg.stats import AIPStats
+from stats import AIPStats
 from cast_common.logger import Logger,INFO
 from cast_common.aipRestCall import AipRestCall
 from cast_common.util import format_table,list_to_text
@@ -34,8 +34,8 @@ class ActionPlan(AipRestCall):
         self._aip_data=aip_data
 
         #ef_name = abspath(f'{dirname(__file__)}/Effort.csv')
-        self.ef_name = abspath(f'{getsitepackages()[-1]}/cast_arg/Effort.csv')
-        # self.ef_name = abspath(f'src/cast_arg/Effort.csv')
+        # self.ef_name = abspath(f'{getsitepackages()[-1]}/cast_arg/Effort.csv')
+        self.ef_name = abspath(f'src/cast_arg/Effort.csv')
 
         if not exists(self.ef_name):
             raise RuntimeError(f'Required file not found: {self.ef_name}')

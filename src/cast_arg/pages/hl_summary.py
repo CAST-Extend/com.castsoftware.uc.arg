@@ -3,7 +3,7 @@ from cast_common.util import list_to_text,convert_LOC
 
 from pandas import DataFrame, concat
 from cast_common.powerpoint import PowerPoint
-from cast_arg.pages.hl_report import HLPage
+from pages.hl_report import HLPage
 from math import ceil
 from inspect import currentframe
 

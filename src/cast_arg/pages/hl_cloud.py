@@ -3,7 +3,7 @@ from cast_common.highlight import Highlight
 from cast_common.logger import Logger, INFO,DEBUG
 from cast_common.powerpoint import PowerPoint
 from cast_common.util import format_table
-from cast_arg.pages.hl_report import HLPage
+from pages.hl_report import HLPage
 
 from pandas import DataFrame,Series,json_normalize,ExcelWriter
 from os.path import abspath
@@ -42,7 +42,6 @@ class CloudMaturity(HLPage):
             self.ppt.update_chart(f'{self.tag_prefix}_CloudTechPieChart',agr)
 
             data = data.drop(columns=['Files']).sort_values(['Rule Types','NB Roadblocks','Technology'])
-            print(data)
             self.ppt.update_table(f'{self.tag_prefix}_CloudDetailTable',data,app,include_index=False)  
 
             pass      

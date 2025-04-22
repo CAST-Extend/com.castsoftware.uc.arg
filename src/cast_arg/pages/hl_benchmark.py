@@ -1,4 +1,4 @@
-from cast_arg.pages.hl_report import HLPage
+from pages.hl_report import HLPage
 from cast_common.powerpoint import PowerPoint
 from cast_common.logger import DEBUG,INFO
 from pptx.chart.data import CategoryChartData

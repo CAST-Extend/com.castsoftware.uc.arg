@@ -1,26 +1,26 @@
-from cast_arg.restCall import AipData,HLData
-#from cast_arg.powerpoint import PowerPoint
-from cast_arg.actionPlan import ActionPlan
-from cast_arg.config import Config
-from cast_arg.pages.hl_cloud_container import CloudContainer
-from cast_arg.pages.hl_cloud import CloudMaturity
-from cast_arg.pages.hl_greenIt import GreenIt
-from cast_arg.pages.hl_summary import HighlightSummary
-from cast_arg.pages.hl_benchmark import HighlightBenchmark
-from cast_arg.pages.mri_strengh_improvement import StrengthImprovment
-from cast_arg.pages.mri_grades import MRIGrades
-from cast_arg.pages.mri_sizing import MRISizing
-from cast_arg.pages.mri_overview import MRIOverview
-from cast_arg.pages.mri_tech_detail_table import TechDetailTable
+from restCall import AipData,HLData
+#from powerpoint import PowerPoint
+from actionPlan import ActionPlan
+from config import Config
+from pages.hl_cloud_container import CloudContainer
+from pages.hl_cloud import CloudMaturity
+from pages.hl_greenIt import GreenIt
+from pages.hl_summary import HighlightSummary
+from pages.hl_benchmark import HighlightBenchmark
+from pages.mri_strengh_improvement import StrengthImprovment
+from pages.mri_grades import MRIGrades
+from pages.mri_sizing import MRISizing
+from pages.mri_overview import MRIOverview
+from pages.mri_tech_detail_table import TechDetailTable
 
-from cast_arg.stats import OssStats,AIPStats,LicenseStats
+from stats import OssStats,AIPStats,LicenseStats
 
 
 
 from cast_common.mri import MRI
 from cast_common.logger import Logger,DEBUG, INFO, WARN
 from cast_common.util import find_nth, no_dups, list_to_text,create_folder,yes_no_input
-from cast_arg.powerpoint import PowerPoint
+from powerpoint import PowerPoint
 from cast_common.highlight import Highlight
 
 from copy import deepcopy

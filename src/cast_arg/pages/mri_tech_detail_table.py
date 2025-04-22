@@ -3,8 +3,8 @@ from cast_common.logger import Logger, INFO,DEBUG
 #from cast_common.aipRestCall import AipRestCall
 #from cast_arg import AipData
 from cast_common.mri import MRI
-from cast_arg.powerpoint import PowerPoint
-from cast_arg.pages.mri_report import MRIPage
+from powerpoint import PowerPoint
+from pages.mri_report import MRIPage
 from pandas import json_normalize,DataFrame
 from tqdm import tqdm
 
