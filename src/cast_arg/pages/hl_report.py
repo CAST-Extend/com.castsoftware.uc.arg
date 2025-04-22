@@ -2,6 +2,8 @@ from cast_common.highlight import Highlight
 from cast_arg.powerpoint import PowerPoint
 from cast_common.logger import Logger,INFO
 from pandas import DataFrame
+from json import load,JSONDecodeError
+from os.path import exists,abspath
 
 
 class HLPage(Highlight):
@@ -12,6 +14,9 @@ class HLPage(Highlight):
     _benchmark = None
 
     _tag_prefix = None
+
+    _text_replace_json = {}
+    _text_replace_file = abspath('text_replace.json')
 
     @property
     def ppt(self) -> PowerPoint:
@@ -31,13 +36,13 @@ class HLPage(Highlight):
         return HLPage._output
     
     @property
-    def log(self) -> str:
+    def log(self) -> Logger:
         return HLPage._log
     
     @property
-    def ppt(self) -> str:
-        return HLPage._ppt
-        
+    def replace_options(self) -> dict:
+        return HLPage._text_replace_json
+
     def __init__(self,output:str=None,ppt:PowerPoint=None,  
                  hl_user:str=None, hl_pswd:str=None,hl_basic_auth=None, hl_instance:int=0,
                  hl_apps:str=[],hl_tags:str=[], 
@@ -63,15 +68,44 @@ class HLPage(Highlight):
         if HLPage._benchmark is None:
             HLPage._benchmark = DataFrame(self._get(r'/benchmark'))
 
+        if HLPage._text_replace_json == {}:
+            if not exists(HLPage._text_replace_file):
+                raise AttributeError(f'Text Replacement file not found: {HLPage._text_replace_file}')
+            try:
+                HLPage._text_replace_json = load(open(HLPage._text_replace_file))
+            except JSONDecodeError as ex:
+                raise AttributeError(f'Malformed text replacement file {HLPage._text_replace_file}: {ex}')
 
-    def replace_text(self, item, data,shape=False,slide=None):
-        tag = f'{self.tag_prefix}_{item}'
-        self.log.debug(f'{tag}: {data}')
+
+
+    def replace_from_options(self,tag,level):
+        #loop through the text replacment json file     
+        for t in self.replace_options:
+            repl = f'{tag}_{t}'
+            try:
+                self.replace_text(repl,self.replace_options[t][level])
+            except KeyError as ke:
+                self.log.warning(f'Text replacement failure in {self.__class__} for [{repl}][{level}]')
+
+    def replace_text(self, find_tag:str, data, shape=False, slide=None):
+        """
+                            Review PowerPoint Presentations                     
+                             Performing Text Replacement                       
+                                                                               
+            The find_tag parameter is used to identify the text to be replaced
+            The data parameter contains the replacement text, or data.    
+
+            Use the shape and slide parameters to limit the search accordingly            
+        """
+        # if slide is None:
+        #     slide = PowerPoint.ppt._prs.slides[3]
+        replace_tag = f'{self.tag_prefix}_{find_tag}'
+        self.log.debug(f'{replace_tag}: {data}')
         if shape:
-            # slide = PowerPoint.ppt._prs.slides[3]
-            PowerPoint.ppt.replace_textbox(tag,data,slide=slide)
+            PowerPoint.ppt.replace_textbox(replace_tag, data, slide=slide)
         else:
-            tag = f'{{{tag}}}'
-            PowerPoint.ppt.replace_text(tag,data,slide=slide)
-        
+            replace_tag_with_braces = f'{{{replace_tag}}}'
+            PowerPoint.ppt.replace_text(replace_tag_with_braces, data, slide=slide)
+
+
 

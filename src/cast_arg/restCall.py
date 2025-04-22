@@ -151,7 +151,7 @@ class AipData(AipRestCall):
                 rp = json_normalize(self.get_rules(domain_id,snapshot_id,key)['rulePattern'])
                 temp['violation'] = rp['name']
                 temp['category'] = value
-                temp = temp.groupby(['category','violation']).size().reset_index(name='count') 
+                temp = temp.groupby(['category','violation']).size().reset_index(name='count')
 
                 total = temp.groupby(['category'])['count'].sum().reset_index(name='count') 
                 total['violation']=''
@@ -184,6 +184,8 @@ class AipData(AipRestCall):
                 temp['violation'] = rp['name']
                 temp['category'] = value
                 temp = temp.groupby(['category','violation']).size().reset_index(name='count') 
+
+                temp = temp.sort_values(['count'], ascending=[False]).head(3) 
 
                 total = temp.groupby(['category'])['count'].sum().reset_index(name='count') 
                 total['violation']=''

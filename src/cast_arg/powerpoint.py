@@ -1,4 +1,5 @@
 from cast_common.powerpoint import PowerPoint as common_ppt
+from cast_common.util import yes_no_input
 from cast_common.logger import INFO
 from cast_arg.config import Config
 from pptx.chart.data import CategoryChartData
@@ -8,15 +9,6 @@ from os.path import abspath
 __author__ = "Nevin Kaplan"
 __email__ = "n.kaplan@castsoftware.com"
 __copyright__ = "Copyright 2022, CAST Software"
-
-def yes_no_response(msg:str) -> bool:
-    while answer := input (f'{msg},  [Y or N]?'):
-        if answer.upper() == 'Y':
-            return True
-        elif answer.upper() == 'N':
-            return False
-        else:
-            continue
 
 def numeric_response(msg:str,value:int,max_rows) -> int:
     msg_str=msg
@@ -60,7 +52,7 @@ class PowerPoint(common_ppt):
                 self.log.info(f'{self._out} saved.')
                 return 
             except PermissionError as pe: 
-                if not yes_no_response(f'Error writing {self._out} powerpoint document, Retry'):
+                if not yes_no_input(f'Error writing {self._out} powerpoint document, Retry'):
                     return 
             except Exception as ex:
                 self.log.error(f'General Exception while saving PowerPoint document: {ex}')

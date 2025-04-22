@@ -1,11 +1,11 @@
-from cast_common.highlight import Highlight
+from cast_arg.pages.hl_report import HLPage
 from cast_common.powerpoint import PowerPoint
 from cast_common.logger import DEBUG,INFO
 from pptx.chart.data import CategoryChartData
 from pandas import DataFrame
 from bisect import bisect_left
 
-class HighlightBenchmark(Highlight):
+class HighlightBenchmark(HLPage):
 
     quartile_txt = ['4th','3rd','2nd','1st']
 
@@ -49,33 +49,33 @@ class HighlightBenchmark(Highlight):
             PowerPoint.ppt.replace_text(f'{{bm_industry_{key}_score}}',ind_avg)
 
             #calculat the High/Medium/Low (HML) values for each grade
-            threshold = self.grades[key]['threshold']
-            if len(threshold)>0:
-                if score < threshold[0]:
-                    hml = 'low'
-                elif score > threshold[1]:
-                    hml = 'high'
-                else:
-                    hml = 'medium'
+            # threshold = self.grades[key]['threshold']
+            # if len(threshold)>0:
+            #     if score < threshold[0]:
+            #         hml = 'low'
+            #     elif score > threshold[1]:
+            #         hml = 'high'
+            #     else:
+            #         hml = 'medium'
                 
-                #now set the color according to the HML caluculation 
-                color = self.get_hml_color(hml)
-                PowerPoint.ppt.fill_text_box_color(f'{self._tag_prefix}_{key}_tile',color)
+            #     #now set the color according to the HML caluculation 
+            #     color = self.get_hml_color(hml)
+            #     PowerPoint.ppt.fill_text_box_color(f'{self._tag_prefix}_{key}_tile',color)
 
-                #calculate the quartile boundries
-                qtr = quartile[quartile['index']==key][quart_cols]
-                if not qtr.empty:
-                    qtr = [round(x*100,2) for x in list(qtr.iloc[0])]
-                    qtr.append(100)
+            #calculate the quartile boundries
+            qtr = quartile[quartile['index']==key][quart_cols]
+            if not qtr.empty:
+                qtr = [round(x*100,2) for x in list(qtr.iloc[0])]
+                qtr.append(100)
 
-                #add the quartile bountries table as chart data to the stacked barchart
-                self.fill_slider(key,score,qtr.copy())
-                #self.fill_slider(f'{key}_tech',0,qtr.copy())
+            #add the quartile bountries table as chart data to the stacked barchart
+            self.fill_slider(key,score,qtr.copy())
+            #self.fill_slider(f'{key}_tech',0,qtr.copy())
 
-                #calculate witch quartile the score falls in and fill in the label 
-                idx = bisect_left(qtr,score)
-                qtr_txt = self.quartile_txt[idx]           
-                self.replace_text(f'{key}_quartile',qtr_txt)
+            #calculate witch quartile the score falls in and fill in the label 
+            idx = bisect_left(qtr,score)
+            qtr_txt = self.quartile_txt[idx]           
+            self.replace_text(f'{key}_quartile',qtr_txt)
 
         if self._tag_prefix != 'port_hl':
             tech = self.get_technology(app_list[0])   

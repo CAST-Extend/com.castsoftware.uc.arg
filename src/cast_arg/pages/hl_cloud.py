@@ -41,12 +41,14 @@ class CloudMaturity(HLPage):
             agr = data[['Technology','NB Roadblocks']].groupby('Technology').aggregate('sum').reindex()
             self.ppt.update_chart(f'{self.tag_prefix}_CloudTechPieChart',agr)
 
-            data = data.drop(columns=['Files'])
+            data = data.drop(columns=['Files']).sort_values(['Rule Types','NB Roadblocks','Technology'])
+            print(data)
             self.ppt.update_table(f'{self.tag_prefix}_CloudDetailTable',data,app,include_index=False)  
+
             pass      
         except Exception as ex:
             ex_type, ex_value, ex_traceback = exc_info()
-            self.log.error(f'{ex_type.__name__}: {ex_value} while in {__class__}')
+            self.log.warning(f'{ex_type.__name__}: {ex_value} while in {__class__}')
             status = False
 
         return status
@@ -68,6 +70,8 @@ class CloudMaturity(HLPage):
         df['Effort'] = df['Effort'].round(1)
 
         df = df[['Requirements','Technology','NB Roadblocks','Effort','Criticality','Rule Types','Files']]
+
+        df['NB Roadblocks'] = df['NB Roadblocks'].fillna(0).astype(int)
 
         return df
 

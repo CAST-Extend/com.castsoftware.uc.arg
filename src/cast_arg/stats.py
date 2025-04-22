@@ -146,6 +146,12 @@ class LicenseStats():
         base_txt = f'app{app_no}_hl_lic'
         self._log.debug(f'Replacing {base_txt} tags (_high={self.high}, _med={self.medium}, _low={self.low})')
         ppt.replace_text(f'{{{base_txt}_high}}',self.high)
+
+        if self.high > 0:
+            ppt.replace_text(f'{{{base_txt}_high_text}}', "Consult an IP lawyer to clear up the impact or explore alternative libraries.")
+        else:
+            ppt.replace_text(f'{{{base_txt}_high_text}}', " ")
+
         ppt.replace_text(f'{{{base_txt}_med}}',self.medium)
         ppt.replace_text(f'{{{base_txt}_low}}',self.low)
 
@@ -212,6 +218,12 @@ class OssStats():
         self._log.debug(f'Replacing {base_txt} tags (_eff={self.effort}, _comp_tot={self.components}, _cost={self.cost}, _vio_cnt={self.violations})')
         ppt.replace_text(f'{{{base_txt}_eff}}',self.effort)
         ppt.replace_text(f'{{{base_txt}_comp_tot}}',self.components)
+
+        if self.components > 0:
+            ppt.replace_text(f'{{{base_txt}_comp_tot_text}}', "For CVEs, upgrade to newer versions when possible.")
+        else:
+            ppt.replace_text(f'{{{base_txt}_comp_tot_text}}', " ")
+
         ppt.replace_text(f'{{{base_txt}_cost}}',self.cost)
         ppt.replace_text(f'{{{base_txt}_vio_cnt}}',self.violations)
 
