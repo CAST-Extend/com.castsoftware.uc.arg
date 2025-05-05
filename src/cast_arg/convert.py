@@ -1,24 +1,26 @@
-from cast_arg.restCall import AipData,HLData
-#from cast_arg.powerpoint import PowerPoint
-from cast_arg.actionPlan import ActionPlan
-from cast_arg.config import Config
-from cast_arg.pages.hl_cloud import CloudMaturity
-from cast_arg.pages.hl_greenIt import GreenIt
-from cast_arg.pages.hl_summary import HighlightSummary
-from cast_arg.pages.hl_benchmark import HighlightBenchmark
-from cast_arg.pages.mri_strengh_improvement import StrengthImprovment
-from cast_arg.pages.mri_grades import MRIGrades
-from cast_arg.pages.mri_sizing import MRISizing
-from cast_arg.pages.mri_tech_detail_table import TechDetailTable
+from restCall import AipData,HLData
+#from powerpoint import PowerPoint
+from actionPlan import ActionPlan
+from config import Config
+from pages.hl_cloud_container import CloudContainer
+from pages.hl_cloud import CloudMaturity
+from pages.hl_greenIt import GreenIt
+from pages.hl_summary import HighlightSummary
+from pages.hl_benchmark import HighlightBenchmark
+from pages.mri_strengh_improvement import StrengthImprovment
+from pages.mri_grades import MRIGrades
+from pages.mri_sizing import MRISizing
+from pages.mri_overview import MRIOverview
+from pages.mri_tech_detail_table import TechDetailTable
 
-from cast_arg.stats import OssStats,AIPStats,LicenseStats
+from stats import OssStats,AIPStats,LicenseStats
 
 
 
 from cast_common.mri import MRI
 from cast_common.logger import Logger,DEBUG, INFO, WARN
-from cast_common.util import find_nth, no_dups, list_to_text,format_table
-from cast_arg.powerpoint import PowerPoint
+from cast_common.util import find_nth, no_dups, list_to_text,create_folder,yes_no_input
+from powerpoint import PowerPoint
 from cast_common.highlight import Highlight
 
 from copy import deepcopy
@@ -61,11 +63,16 @@ class GeneratePPT(Logger):
         super().__init__("generate",config.logging_generate)
         self._config = config
 
+        self._ppt = PowerPoint(config)
         out = abspath(f"{config.output}/Project {config.project} - Tech DD Findings.pptx")
         self.out=out
         self.info(f'Generating {out}')
-
-        self._ppt = PowerPoint(config)
+        if not exists(dirname(out)):
+            if yes_no_input(f'{dirname(out)} does not exist, create it now'):
+                create_folder(dirname(out))
+            else:
+                self.info('Aborting report generation')
+                return
 
         # TODO: Handle cases where on HL data is needed and not AIP.
         self.hl_pages = []
@@ -78,26 +85,32 @@ class GeneratePPT(Logger):
                 exit (1)
 
             self.mri_pages = [
+#                MRIOverview(),
                 MRIGrades(log_level=INFO,ppt=self._ppt),
                 MRISizing(),
                 TechDetailTable(),
                 StrengthImprovment()
             ]
         if config.hl_active:
-            self.info("Collecting Highlight Data")
-            hl = Highlight(hl_base_url=config.hl_url,hl_user=config.hl_user,hl_pswd=config.hl_password, \
-                           hl_instance=config.hl_instance,hl_apps=config.hl_list)
-            self.hl_portfolio_pages = [
-                HighlightSummary(self.day_rate,self._config.output,ppt=self._ppt)
-            ]
-            self.hl_pages = [
-                CloudMaturity(),
-                GreenIt(),
-                HighlightSummary(self.day_rate),
-                HighlightBenchmark()
-            ]
-            self._hl_data = HLData(config,log_level=config.logging_highlight)
-
+            try:
+                self.info("Collecting Highlight Data")
+                hl = Highlight(hl_base_url=config.hl_url,hl_user=config.hl_user,hl_pswd=config.hl_password, \
+                            hl_instance=config.hl_instance,hl_apps=config.hl_list)
+                self.hl_portfolio_pages = [
+                    HighlightSummary(self.day_rate,self._config.output,ppt=self._ppt)
+                ]
+                self.hl_pages = [
+                    CloudContainer(),
+                    CloudMaturity(),
+                    GreenIt(),
+                    HighlightSummary(self.day_rate),
+                    HighlightBenchmark()
+                ]
+                self._hl_data = HLData(config,log_level=config.logging_highlight)
+            except PermissionError as ex:
+                self.error('Invalid Highlight Credentials!')
+                raise ex
+            
         #project level work
         app_cnt = len(config.application)
 
@@ -109,13 +122,18 @@ class GeneratePPT(Logger):
             #self._ppt.delete_slide
         else:
             self._ppt.duplicate_slides(app_cnt)
+            self._ppt.save()
+            # exit()
+            
             self._ppt.copy_block("each_app",["app"],app_cnt)
             # self._ppt.save()
             # return 
 
         self._ppt.replace_text("{app_per_page}","",tbd_for_blanks=False)
 
-        self.expand_tables(config,['project_overview'])
+        if self._config.aip_active:
+            self.expand_tables(config,['project_overview'])
+
         self.replace_all_text()
 
     def expand_tables(self,config:Config,table_names:list):
@@ -270,7 +288,7 @@ class GeneratePPT(Logger):
                     self._ppt.replace_text(f'{{app{app_no}_high_risk_grade_names}}',list_to_text(risk_grades.index.values))
 
                     snapshot = self._aip_data.snapshot(app=app_id)
-                    self._ppt.replace_text(f'{{app{app_no}_all_technogies}}',list_to_text(snapshot['technology']))
+                    self._ppt.replace_text(f'{{app{app_no}_all_technologies}}',list_to_text(snapshot['technology']))
                     
                     """
                         Populate the document insites page
@@ -346,50 +364,43 @@ class GeneratePPT(Logger):
                     proc.report(hl_id,app_no)
 
                 try:
-                    (oss_crit,oss_high,oss_med,lic,components) = self.oss_risk_assessment(hl_id,app_no,day_rate)
+                    # Call the oss_risk_assessment method to get OSS risk data
+                    (oss_crit, oss_high, oss_med, lic, components) = self.oss_risk_assessment(hl_id, app_no, day_rate)
+
+                    # Add critical OSS risk data to fix_now_total
                     fix_now_total.add_effort(oss_crit.effort)
                     fix_now_total.add_violations(oss_crit.violations)
 
+                    # Add high and medium OSS risk effort to near_term_total
                     near_term_total.add_effort(oss_high.effort)
                     near_term_total.add_effort(oss_med.effort)
 
+                    # Add high and medium OSS risk data to hl_near_term_total
                     hl_near_term_total.add_effort(oss_high.effort)
                     hl_near_term_total.add_effort(oss_med.effort)
                     hl_near_term_total.add_violations(oss_high.violations)
                     hl_near_term_total.add_violations(oss_med.violations)
-                    hl_near_term_total.replace_text(self._ppt,app_no,'hl_near_term_total')
+                    hl_near_term_total.replace_text(self._ppt, app_no, 'hl_near_term_total')
 
+                    # Add critical OSS risk components and violations to hl_summary_critical
                     hl_summary_critical.add_components(oss_crit.components)
                     hl_summary_critical.add_violations(oss_crit.violations)
 
+                    # Add high and medium OSS risk components to hl_summary_high_near
                     hl_summary_high_near.add_components(oss_high.components)
                     hl_summary_high_near.add_components(oss_med.components)
 
+                    # Add all OSS risk components to hl_summary
                     hl_summary.add_components(components)
 
+                    # Add license risk data to lic_summary
                     lic_summary.add_high(lic.high)
                     lic_summary.add_medium(lic.medium)
                     lic_summary.add_low(lic.low)
 
-
                 except KeyError as ex:
+                    # Log a warning if OSS information is not found
                     self.warning(f'OSS information not found {str(ex)}')
-
-
-                """
-                    Cloud ready excel sheet generation
-                """
-                # try:
-                #     cloud = self._hl_data.get_cloud_info(hl_id)
-                #     cloud = cloud[['cloudRequirement.display','Technology','cloudRequirement.ruleType','cloudRequirement.criticality','contributionScore','roadblocks']]
-                #     file_name = f'{self._config.output}/cloud-{self._config.title_list[idx]}.xlsx'
-                #     writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
-                #     col_widths=[50,10,10,10,10,10,10]
-                #     cloud_tab = format_table(writer,cloud,'Cloud Data',col_widths)
-                #     writer.close()
-                # except Exception as e:
-                #     self.error(f'unknown error while processing cloud ready data: {str(e)}')
-
 
             summary_fix_now.add_effort(fix_now_total.effort)
             summary_fix_now.add_violations(fix_now_total.violations)

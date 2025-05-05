@@ -1,5 +1,5 @@
-from cast_arg.pages.mri_report import MRIPage
-from cast_arg.powerpoint import PowerPoint
+from pages.mri_report import MRIPage
+from powerpoint import PowerPoint
 from cast_common.util import format_table
 
 from pandas import ExcelWriter
@@ -32,7 +32,9 @@ class StrengthImprovment(MRIPage):
 
         #cause_name = abspath(f'{dirname(__file__)}/cause.json')
 
-        cause_name = abspath(f'{getsitepackages()[-1]}/cast_arg/cause.json')
+        # cause_name = abspath(f'{getsitepackages()[-1]}/cast_arg/cause.json')
+        cause_name = abspath(f'src/cast_arg/cause.json')
+
         imp_df['Cause']=''
         with open(cause_name) as json_file:
             tech_data = load(json_file)

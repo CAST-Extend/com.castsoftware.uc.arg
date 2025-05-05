@@ -1,5 +1,5 @@
-from cast_arg.pages.mri_report import MRIPage
-from cast_arg.powerpoint import PowerPoint
+from pages.mri_report import MRIPage
+from powerpoint import PowerPoint
 from cast_common.util import format_table,list_to_text
 
 from pandas import Series

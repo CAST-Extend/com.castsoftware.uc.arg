@@ -3,7 +3,7 @@ from cast_common.highlight import Highlight
 from cast_common.logger import Logger, INFO,DEBUG
 from cast_common.powerpoint import PowerPoint
 from cast_common.util import format_table
-from cast_arg.pages.hl_report import HLPage
+from pages.hl_report import HLPage
 
 from pandas import DataFrame,Series,json_normalize,ExcelWriter
 from os.path import abspath

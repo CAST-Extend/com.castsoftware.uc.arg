@@ -1,73 +1,86 @@
 from cast_common.highlight import Highlight
-from cast_arg.pages.hl_report import HLPage
-from cast_common.logger import Logger, INFO,DEBUG
-from cast_common.powerpoint import PowerPoint
 from cast_common.util import list_to_text,convert_LOC
-from pandas import concat,DataFrame
-from math import ceil
 
-from pandas import json_normalize
-from pptx.enum.shapes import MSO_SHAPE_TYPE
+from pandas import DataFrame, concat
+from cast_common.powerpoint import PowerPoint
+from pages.hl_report import HLPage
+from math import ceil
+from inspect import currentframe
 
 class HighlightSummary(HLPage):
 
     def __init__(self,day_rate:int,output:str=None,ppt:PowerPoint=None):
         super().__init__(output=output,ppt=ppt)
+
         self._day_rate = day_rate
         pass        
 
-    def report(self,app_name:str|list=None,app_no:int=0) -> bool:
+    def report(self, app_name: str | list = None, app_no: int = 0) -> bool:
+        """
+        Generate a highlight summary report for the specified application(s).
+        """
         if type(app_name) is list:
             self.tag_prefix = 'port'
         else:
             self.tag_prefix = f'app{app_no}'
             app_name = [app_name]
 
-        #create list of technolgies sorted by LOC in decending order
+        tech_df, comp_total = self._get_technology_data(app_name)
+        cloud_df = self._get_cloud_detail(app_name)
+        green_df = self._get_green_detail(app_name)
+        oss_data = self._get_oss_data(app_name)
+        app_scores = self._calculate_scores(app_name)
+
+        self._process_data(app_name,tech_df, comp_total, cloud_df, green_df, oss_data,app_scores)
+
+        return True
+
+    def _get_technology_data(self, app_name: list) -> tuple[DataFrame, int]:
+        """
+        Retrieve and process technology data for the specified applications.
+        """
         tech_df = DataFrame()
         comp_total = 0
-        # oss_cve_df = DataFrame()
-        cloud_df = DataFrame()
-        green_df = DataFrame()
-
-        t_health=t_cloud=t_oss=t_green=0
-        t_high_license = t_medium_license = t_low_license = t_license = 0
-        low_health={}
-        oss_cve_counts={}
-        t_scores = self.calc_scores(app_name)
-
-        scores = {}
-
-        oss={}
-        oss['cve']={}
-        oss['license']={}
         for app in app_name:
             df = self.get_technology(app)
-            tech_df = concat([tech_df,df])
-            #
+            tech_df = concat([tech_df, df])
+            comp_total += self.get_component_total(app)
+        return tech_df, comp_total
 
-            scores[app] = self.calc_scores([app])
+    def _get_cloud_detail(self, app_name: list) -> DataFrame:
+        """
+        Retrieve and process cloud requirement details for the specified applications.
+        """
+        cloud_df = DataFrame()
+        for app in app_name:
+            df = self.get_cloud_detail(app)
+            df = df[df['cloudRequirement.criticality'].isin(['Critical', 'High'])]
+            cloud_df = concat([cloud_df, df])
+        return cloud_df
 
+    def _get_green_detail(self, app_name: list) -> DataFrame:
+        """
+        Retrieve and process green requirement details for the specified applications.
+        """
+        green_df = DataFrame()
+        for app in app_name:
+            green_df = concat([green_df, self.get_green_detail(app)])
+        return green_df
+
+    def _get_oss_data(self, app_name: list) -> dict:
+        """
+        Retrieve and process open source safety data for the specified applications.
+        """
+        oss = {'cve': {}, 'total': {}}
+        t_high_license = t_medium_license = t_low_license = t_license = comp_total = 0
+
+        for app in app_name:
             t_high_license += len(self.get_license_high(app))
             t_medium_license += len(self.get_license_medium(app))
             t_low_license += len(self.get_license_low(app))
             t_license += t_high_license + t_medium_license + t_low_license
-
-            health = self.get_software_health_score(app)
-            #save information to be used for ranking
-            low_health[app]=health # save the health score for ranking
-            
             comp_total += self.get_component_total(app)
-#            oss_score += self.get_software_oss_safty_score(app) 
 
-            """
-                get the Common Vulnerabilty and Exposue information by priority
-                
-                The highlight class has three methods get_cve_critical, get_cve_high
-                and get_cve_medum. (we don't care about the low priority items). Use 
-                them to retrieve the information and store it in a dictionary for later 
-                use.
-            """
             for crit in ['critical','high','medium']:
                 mth = getattr(self,f'get_cve_{crit}')
                 df = mth(app)
@@ -76,111 +89,100 @@ class HighlightSummary(HLPage):
                         oss['cve'][crit] = concat([oss['cve'][crit],df])
                     else: 
                         oss['cve'][crit] = df
-            pass
 
-            df = self.get_cloud_detail(app)
-            df = df[df['cloudRequirement.criticality'].isin(['Critical','High'])] 
-            cloud_df = concat([cloud_df,df])
+        oss['license'] = {'high': t_high_license, 'medium': t_medium_license, 'low': t_low_license, 'total': t_license}   
+        return oss
 
-            green_df = concat([green_df,self.get_green_detail(app)])
-            pass
+    def _calculate_scores(self, app_name: list) -> dict:
+        """
+        Calculate software quality scores for the specified applications.
+        """
+        scores = {}
+        for app in app_name:
+            scores[app] = self.calc_scores([app])
+        return scores
 
-        text = {
-            'quality':{'high':'high','medium':'moderate','low':'low-level'},
-            'improvement':{'high':'no immediate action required','medium':'room for improvement','low':'ample opportunity for improvement'},
-            'maintain':{'high':'highly maintainable','medium':'maintainable but needs improvement','low':'is not maintainable'},
-
-            'quality_alt_1':{'high':'well','medium':'fair','low':'bad'},
-            'quality_alt_2':{'high':'impressive','medium':'fair','low':'poor'},
-            'quality_alt_3':{'high':'stands out','medium':'average','low':'in need of improvement'},
-            'maturity':{'high':'high','medium':'medium','low':'low'},
-            'effort':{'high':'minimal','medium':'medium','low':'considerable'},
-            'risk':{'high':'low amount of','medium':'average','low':'very high'}
-        }
-
+    def _process_data(self, app_name: list, tech_df, comp_total, cloud_df, green_df, oss_data,app_scores):
+        """
+        Process the collected data and update the report placeholders.
+        """
+        low_health={}
         t_apps = len(app_name)
+        port_scores = self.calc_scores(app_name)
         for key in self.grades:
-            score = t_scores[key] 
-            self.replace_text(f'{key}_score',score,shape=True)
+            try:
+                score = port_scores[key] 
+                hml = self.update_grade_score(key, score)
 
-            # calculate the "BEST" and "WORST" grades for each tile
-            high=0
-            low = 100
-            for app in app_name:
-                a = scores[app]
-                g = a[key]
-                if g < low: low = g
-                if g > high: high = g
+                # calculate the "BEST" and "WORST" grades for each tile
+                high=0
+                low = 100
+                for app in app_name:
+                    g = app_scores[app][key]
+                    if g < low: low = g
+                    if g > high: high = g
 
-            self.replace_text(f'bmw_{key}_score',low,shape=True)
-            self.replace_text(f'bmb_{key}_score',high,shape=True)
-            self.replace_text(f'bmi_{key}_score',round(self._benchmark.loc[key]['avg']*100,2),shape=True)
+                self.replace_text(f'bmw_{key}_score',low,shape=True)
+                self.replace_text(f'bmb_{key}_score',high,shape=True)
+                self.replace_text(f'bmi_{key}_score',round(self._benchmark.loc[key]['avg']*100,2),shape=True)
 
-            # is this grade score above, below or equal to the industry average?
-            bm = round(Highlight._benchmark.loc[key]['avg']*100,2)
-            score_bm_hml = 'equal'
-            if score > bm:
-                score_bm_hml = 'high'
-            elif score < bm: 
-                score_bm_hml = 'low'
-            self.replace_text(f'{key}_bm_hle',score_bm_hml)
+                # is this grade score above, below or equal to the industry average?
+                bm = round(Highlight._benchmark.loc[key]['avg']*100,2)
+                score_bm_hml = 'equal'
+                if score > bm:
+                    score_bm_hml = 'high'
+                elif score < bm: 
+                    score_bm_hml = 'low'
+                self.replace_text(f'{key}_bm_hle',score_bm_hml)
 
-            if key == 'openSourceSafety':
-                hml_risk = self.get_get_software_oss_risk(score=score)
-                self.replace_text(f'{key}_hml_risk',hml)
-                self.replace_text(f'{key}_risk',hml)
+                if key == 'openSourceSafety':
+                    hml_risk = self.get_get_software_oss_risk(score=score)
+                    self.replace_text(f'{key}_hml_risk',hml)
+                    self.replace_text(f'{key}_risk',hml)
 
-                hml_score={'high':'low','medium':'medium','low':'high'}
-                self.replace_text(f'{key}_hml_score',hml_score[hml_risk])
+                    hml_score={'high':'low','medium':'medium','low':'high'}
+                    self.replace_text(f'{key}_hml_score',hml_score[hml_risk])
 
-                total_cves = 0
-                total_cmpnts_df = DataFrame(columns=['component'])
-                for key in oss['cve'].keys():
-                    eff = 0
-                    cmpnt_df=DataFrame()
-                    df = oss['cve'][key]
-                    if df is not None:
-                        cmpnt_df['component']=df['component']
-                        if not cmpnt_df.empty:
-                            total_cmpnts_df = concat([cmpnt_df,total_cmpnts_df])
-                            eff = ceil(len(cmpnt_df['component'].unique())/2)
-                        cnt = len(df['cve'].unique())
-                        total_cves += cnt
+                    total_cves = 0
+                    total_cmpnts_df = DataFrame(columns=['component'])
+                    for oss_key in oss_data['cve'].keys():
+                        eff = 0
+                        cmpnt_df=DataFrame()
+                        df = oss_data['cve'][oss_key]
+                        if df is not None:
+                            cmpnt_df['component']=df['component']
+                            if not cmpnt_df.empty:
+                                total_cmpnts_df = concat([cmpnt_df,total_cmpnts_df])
+                                eff = ceil(len(cmpnt_df['component'].unique())/2)
+                            cnt = len(df['cve'].unique())
+                            total_cves += cnt
 
-                    self.replace_text(f'{key}_cve_total',cnt)
-                    self.replace_text(f'{key}_cve_effort',eff)
+                        self.replace_text(f'{oss_key}_oss_total',cnt)
+                        self.replace_text(f'{oss_key}_oss_effort',eff)
+                        pass
+        
+                    self.replace_text('cve_total',total_cves)
+                    total_eff = 0
+                    if not total_cmpnts_df.empty:
+                        total_eff = ceil(len(total_cmpnts_df['component'].unique())/2)
+                        self.replace_text(f'{key}_total_cve_effort',total_eff)
+                    
+                    for lic_key in oss_data['license'].keys():
+                        self.replace_text(f'{lic_key}_license_total', oss_data['license'][lic_key])
+
                     pass
-    
-                self.replace_text('cve_total',total_cves)
-                total_eff = 0
-                if not total_cmpnts_df.empty:
-                    total_eff = ceil(len(total_cmpnts_df['component'].unique())/2)
-                    self.replace_text(f'{key}_total_cve_effort',total_eff)
+                    self.replace_text('oss_effort',ceil(total_cves/2))
 
+                    health = self.get_software_health_score(app)
+                    #save information to be used for ranking
+                    low_health[app]=health # save the health score for ranking
 
-                
-                self.replace_text('high_license_total',f'{t_high_license:,}')
-                self.replace_text('oss_effort',ceil(total_cves/2))
-                
+                pass
 
-
-                # oss_cve_counts[app]=len(cve_df['cve'].unique()) 
-                # cve_df=cve_df['cve']
-                # oss_cve_df = concat([oss_cve_df,cve_df])
-            else:
-                threshold = self.grades[key]['threshold']
-                if len(threshold)>1:
-                    if score < threshold[0]:
-                        hml = 'low'
-                    elif score > threshold[1]:
-                        hml = 'high'
-                    else:
-                        hml = 'medium'
-                    color = self.get_hml_color(hml)
-                    PowerPoint.ppt.fill_text_box_color(f'{self.tag_prefix}_{key}_tile',color)
-
-                    for t in text:
-                        self.replace_text(f'{key}_{t}',text[t][hml])
+            except (KeyError) as ex:
+                self.log.error(f'{repr(ex)} in {currentframe().f_code.co_name}')
+            except Exception as ex:
+                self.log.error(f'unknown: {repr(ex)} in {currentframe().f_code.co_name}')
 
         self.replace_text('app_count',t_apps)
 
@@ -198,7 +200,7 @@ class HighlightSummary(HLPage):
         total_files = int(tech_df['totalFiles'].sum())
         self.replace_text('total_files',f'{total_files:,}')
         self.replace_text('oss_total_components',f'{comp_total:,}')
-        self.replace_text('oss_total_licenses',f'{t_license:,}')
+        # self.replace_text('oss_total_licenses',f'{t_license:,}')
 
         # if oss_cve_df.empty:
         #     oss_crit_vio_total = 0
@@ -222,41 +224,89 @@ class HighlightSummary(HLPage):
         self.replace_text('green_booster_total',boosters)
         self.replace_text('green_blocker_total',blockers)
 
-        if not green_df.empty:
-            self.replace_text('green_hml',self.get_software_green_hml(score=t_green))
+        # if not green_df.empty:
+        #     self.replace_text('green_hml',self.get_software_green_hml(score=t_green))
 
-        if self.tag_prefix == 'port_hl':
-            (health_low_app,health_low_score,health_high_app,health_high_score) = self._get_high_low_factors(low_health)
-            self.replace_text('softwareHealth_low_app',health_low_app)
-            self.replace_text('softwareHealth_high_app',health_high_app)
-            self.replace_text('softwareHealth_low_score',health_low_score)
-            self.replace_text('softwareHealth_high_score',health_high_score)
+        # if self.tag_prefix == 'port_hl':
+        #     (health_low_app,health_low_score,health_high_app,health_high_score) = self._get_high_low_factors(low_health)
+        #     self.replace_text('softwareHealth_low_app',health_low_app)
+        #     self.replace_text('softwareHealth_high_app',health_high_app)
+        #     self.replace_text('softwareHealth_low_score',health_low_score)
+        #     self.replace_text('softwareHealth_high_score',health_high_score)
 
-            (oss_low_app,oss_low_crit_total,oss_high_app,oss_high_crit_total) = self._get_high_low_factors(oss_cve_counts)
-            self.replace_text('oss_low_app',oss_low_app)
-            self.replace_text('oss_high_app',oss_high_app)
-            self.replace_text('oss_low_critical_total',oss_low_crit_total)
-            self.replace_text('oss_high_critical_total',oss_high_crit_total)
+        #     (oss_low_app,oss_low_crit_total,oss_high_app,oss_high_crit_total) = self._get_high_low_factors(oss_cve_counts)
+        #     self.replace_text('oss_low_app',oss_low_app)
+        #     self.replace_text('oss_high_app',oss_high_app)
+        #     self.replace_text('oss_low_critical_total',oss_low_crit_total)
+        #     self.replace_text('oss_high_critical_total',oss_high_crit_total)
 
-    def _get_high_low_factors(self,factor:list):
-        if len(factor)==0:
-            return (0,0,0,0)
-        low_app = min(factor, key=factor.get)
-        low_score = round(factor[low_app],1)
-        high_app = max(factor, key=factor.get)
-        high_score = round(factor[high_app],1)
-        return (low_app,low_score,high_app,high_score)
+    def update_grade_score(self, key, score):
+        """
+        Update the score, color, and text for a given grade.
 
+        Args:
+            key (str): The grade key (e.g., 'health_score', 'transfer_score', etc.).
+            score (float): The calculated score for the grade.
+        """
+        threshold = self.grades[key]['threshold']
+        hml = self._get_hml_category(score, threshold)
+        color = self.get_hml_color(hml)
+        self._update_tile_color(key, color)
+        self._update_score_text(key, score)
+        self._replace_from_options(key, hml)
+        self.replace_text(f'{key}_score', f'{score}%', shape=True)
+        return hml
 
-# from os.path import abspath
-# from cast_common.util import format_table
-# from pandas import ExcelWriter
+    def _get_hml_category(self, score, threshold):
+        """
+        Determine the High/Medium/Low (HML) category based on the score and threshold.
 
-# ppt = PowerPoint(r'E:\work\Decks\highlight-test.pptx',r'E:\work\Decks\test\highlight.pptx')
+        Args:
+            score (float): The calculated score.
+            threshold (list): A list containing the low and high threshold values.
 
-# app = 'CollabServer'
-                            
-# hl = HighlightSummary('n.kaplan+insightsoftwareMinerva@castsoftware.com','vadKpBFAZ8KIKb2f2y',hl_instance=383,hl_base_url='https://app.casthighlight.com',log_level=DEBUG)
-# hl.report(app,1,ppt,r'E:\work\Decks\test')
-# ppt.save()
+        Returns:
+            str: The HML category ('low', 'medium', or 'high').
+        """
+        if len(threshold) > 1:
+            if score < threshold[0]:
+                return 'low'
+            elif score > threshold[1]:
+                return 'high'
+            else:
+                return 'medium'
+        else:
+            raise ValueError("Invalid threshold format")
+
+    def _update_tile_color(self, key, color):
+        """
+        Update the color of the tile for the given grade.
+
+        Args:
+            key (str): The grade key.
+            color (str): The color to be applied to the tile.
+        """
+        tile_name = f'{self.tag_prefix}_{key}_tile'
+        PowerPoint.ppt.fill_text_box_color(tile_name, color)
+
+    def _update_score_text(self, key, score):
+        """
+        Update the text displaying the score for the given grade.
+
+        Args:
+            key (str): The grade key.
+            score (float): The calculated score.
+        """
+        score_text = f'{key}_score'
+        self.replace_text(score_text, f'{score}%', shape=True)
+
+    def _replace_from_options(self, key, hml):
+        """
+        Replace the text based on the HML category for the given grade.
+
+        Args:
+            key (str): The grade key.
+            hml (str): The HML category ('low', 'medium', or 'high').
+        """
+        self.replace_from_options(key, hml)
 

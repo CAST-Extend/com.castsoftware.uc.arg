@@ -3,8 +3,8 @@ from cast_common.logger import Logger, INFO,DEBUG
 #from cast_common.aipRestCall import AipRestCall
 #from cast_arg import AipData
 from cast_common.mri import MRI
-from cast_arg.powerpoint import PowerPoint
-from cast_arg.pages.mri_report import MRIPage
+from powerpoint import PowerPoint
+from pages.mri_report import MRIPage
 from pandas import json_normalize,DataFrame
 from tqdm import tqdm
 
@@ -26,7 +26,7 @@ class TechDetailTable(MRIPage):
 
         domain_id = self.get_domain(app_name)
         snapshot = self.get_latest_snapshot(domain_id)
-        (ap_df,ap_summary_df)=self.get_action_plan(domain_id,snapshot['id'])        
+        (ap_df,ap_summary_df)=self.get_action_plan(domain_id,snapshot['id']) 
 
         sizing_df = self.get_sizing_by_module(domain_id,snapshot,sizing)
         sizing_df['Fix Now']=0
@@ -41,14 +41,14 @@ class TechDetailTable(MRIPage):
         else:
             for key, value in sizing_df.iterrows():
                 if key=='All':
-                    sizing_df.at[key,'Fix Now'] = len(ap_df[ap_df['Action Plan Priority']=='Fix-Now'])
-                    sizing_df.at[key,'Near Term'] = len(ap_df[ap_df['Action Plan Priority']=='Near-Term'])
-                    sizing_df.at[key,'Mid Term'] = len(ap_df[ap_df['Action Plan Priority']=='Mid-Term'])
+                    sizing_df.at[key,'Fix Now'] = len(ap_df[ap_df['Action Plan Priority']=='Fix Now'])
+                    sizing_df.at[key,'Near Term'] = len(ap_df[ap_df['Action Plan Priority']=='Near Term'])
+                    sizing_df.at[key,'Mid Term'] = len(ap_df[ap_df['Action Plan Priority']=='Mid Term'])
                     # sizing_df.at[key,'Long Term'] = len(ap_df[ap_df['Action Plan Priority']=='Long-Term'])
                 else:
-                    sizing_df.at[key,'Fix Now'] = self._get_counts(ap_df,'Fix-Now',key)
-                    sizing_df.at[key,'Near Term'] = self._get_counts(ap_df,'Near-Term',key)
-                    sizing_df.at[key,'Mid Term'] = self._get_counts(ap_df,'Mid-Term',key)
+                    sizing_df.at[key,'Fix Now'] = self._get_counts(ap_df,'Fix Now',key)
+                    sizing_df.at[key,'Near Term'] = self._get_counts(ap_df,'Near Term',key)
+                    sizing_df.at[key,'Mid Term'] = self._get_counts(ap_df,'Mid Term',key)
                     # sizing_df.at[key,'Long Term'] = self._get_counts(ap_df,'Long-Term',key)
                 pass
 

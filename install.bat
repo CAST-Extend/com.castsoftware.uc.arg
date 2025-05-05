@@ -2,30 +2,11 @@
 setlocal EnableDelayedExpansion
 
 :: Initialize the default PIP install version
-set PIP_INSTALL_VERSION=1.6.9
+set PIP_INSTALL_VERSION=1.7.7
 
 :: Set Python version
-set "python_version=3.10.6"
+set "python_version=3.10.10
 
-:: Check script name
-if "%~0"=="install.bat" (
-
-    :: Check for command-line arguments
-    if not "%1"=="" (
-        if "%1"=="upgrade" (
-            echo Detected upgrade command...
-
-            if not "%2"=="" (
-                set "PIP_INSTALL_VERSION=%2"
-             
-            ) else (
-                echo ...
-            )
-        )
-    ) else (
-        echo ...
-    )
-)
 echo .
 echo .
 echo .
@@ -49,7 +30,7 @@ if %errorLevel% == 0 (
     echo Failure: Current permissions inadequate.
     echo Please run the script as an Administrator.
     pause
-    exit
+    exit /b 1
 )
 
 :PythonInstallCheck
@@ -74,32 +55,47 @@ powershell -Command "(New-Object Net.WebClient).DownloadFile('%url%', '%~dp0%ins
 
 :: Install Python
 echo Installing Python Version %python_version%...
-start /wait "" "%~dp0%installer%" /quiet /passive TargetDir="%targetdir1%" Include_test=0 PrependPath=1 ^
-&& (echo Done.) || (echo Failed!)
-echo.
+start /wait "" "%~dp0%installer%" /quiet /passive TargetDir="%targetdir1%" InstallAllUsers=1 Include_test=0 PrependPath=1 Include_pip=1  
+if "%ERRORLEVEL%" == "0" goto Cleanup
 
-:: Cleanup
+echo Error installing Python!
+pause
+exit /b 1
+
+:Cleanup
+echo. 
+echo Python installation completed successfully!
+echo. 
+path=%targetdir1%;%targetdir1%\scripts;%path%
+
 del "%~dp0%installer%"
 
 goto PipCheck
-
 :PipCheck
 
 python -m ensurepip --default-pip
-call pip --version 2>nul
+python -m pip --version 2>nul
 if errorlevel 1 (
   echo PIP not found, please ensure it's installed.
   pause
-  exit
+  exit /b 1
 ) else (
   goto GetDriveLetter
 )
 
-
-
 :GetDriveLetter
+echo. 
+:tryAgain
 set /p drive=Please enter the path where you want to install ARG: 
 set installPath=%drive%\ARG
+
+call :validateFolder %installPath% installPath
+rem echo %installPath%
+
+set /p ays="ARG will be instaled in the "%installPath%" folder, is this correct (Y or [N])?"
+IF /i "%ays%" == "Y"  GOTO CONTINUE
+GOTO tryAgain
+:CONTINUE
 
 if not exist "%installPath%" (
     mkdir "%installPath%"
@@ -110,11 +106,39 @@ if not exist "%installPath%" (
     echo ARG folder already exists at %installPath%. Proceeding with installation.
 )
 
-set CODE_FOLDER=%installPath%
-goto VenvSetup
+:: Copy Files
+echo. 
+echo copying essential files ... 
+if not exist "%installPath%\template" (
+    mkdir "%installPath%\template"
+)
+
+@echo off
+echo @@echo off> arg.bat
+echo set config=%%1>> arg.bat
+echo.>> arg.bat
+echo call .\.venv\scripts\activate>> arg.bat
+echo .\.venv\scripts\python.exe %installPath%/src/cast_arg/main.py -c %%config%%>> arg.bat
+
+echo arg.bat file created successfully.
+
+
+:: Copying essential files to the destination folder
+copy "%~dp0arg.bat" "%installPath%"
+copy "%~dp0cause.json" "%installPath%"
+copy "%~dp0text_replace.json" "%installPath%"
+copy "%~dp0*config.json" "%installPath%"
+copy "%~dp0README.md" "%installPath%"
+copy "%~dp0*.pptx" "%installPath%\template"
+copy "%~dp0*.xlsx" "%installPath%\template"
+copy "%~dp0requirements.txt" "%installPath%"
+robocopy "%~dp0src\cast_arg" "%installPath%\src\cast_arg" /E
 
 :VenvSetup
-echo creating virtual environment 
+echo. 
+echo creating virtual environment ... 
+echo. 
+set CODE_FOLDER=%installPath%
 python -m venv "%CODE_FOLDER%\.venv"
 
 :: Rename .venv if it exists
@@ -134,17 +158,10 @@ if not exist "%CODE_FOLDER%\.venv" (
     if errorlevel 1 goto VenvFail
 )
 
-:: Copying essential files to the destination folder
-copy "%~dp0arg.bat" "%installPath%"
-copy "%~dp0cause.json" "%installPath%"
-copy "%~dp0config.json" "%installPath%"
-copy "%~dp0README.md" "%installPath%"
-copy "%~dp0*.pptx" "%installPath%"
-
 :: Activate the virtual environment
 call "%CODE_FOLDER%\.venv\Scripts\activate"
 
-pip install com.castsoftware.uc.arg==%PIP_INSTALL_VERSION%
+pip install -r requirements.txt
 
 goto End
 
@@ -155,9 +172,43 @@ goto Usage
 :Usage
 echo Usage: install.bat
 pause
-exit /b
+exit /b 0
 
 :End
-echo Script completed!
+echo ARG has been successfully installed at %CODE_FOLDER%
 pause
-exit
+exit /b 0
+
+
+:validateFolder
+set "var=%~1"
+
+:: Determine absolute or relative
+echo(!var:^"=!|findstr /i "^[A-Z]:[\\] ^[\\][\\]" >nul && set "type=absolute" || set "type=relative"
+
+:: Determine file or folder or not exists
+for /f eol^=^ delims^= %%F in ("!var!") do (
+  for /f "tokens=1,2 delims=d" %%A in ("-%%~aF") do if "%%B" neq "" (
+	set t=folder
+  ) else if "%%A" neq "-" (
+	set t=file
+  ) else (
+	set t=folder
+  )
+)
+if "%type%"=="relative" (
+	if "%t%"=="file" (
+		echo input must be a folder
+		goto error
+	) else (
+		if "%var:~1,1%" == ":" (
+			set var=%var:~0,2%\%var:~2%
+		) else (
+			set var=%cd%\%var%
+		)
+	)
+)
+
+rem echo %var%
+set "%~2=%var%" 
+exit /b 0

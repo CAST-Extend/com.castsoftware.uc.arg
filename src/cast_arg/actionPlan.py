@@ -1,4 +1,4 @@
-from cast_arg.stats import AIPStats
+from stats import AIPStats
 from cast_common.logger import Logger,INFO
 from cast_common.aipRestCall import AipRestCall
 from cast_common.util import format_table,list_to_text
@@ -14,11 +14,13 @@ __author__ = "Nevin Kaplan"
 __email__ = "n.kaplan@castsoftware.com"
 __copyright__ = "Copyright 2022, CAST Software"
 
-"""
-    This class is used to collect action plan information and add them to the 
-    the proper tags
-"""
+
 class ActionPlan(AipRestCall):
+    """
+        This class is used to collect action plan information and add them to the 
+        the proper tags
+    """
+
     _app_list = []
     _ppt = None
     _aip_data = None
@@ -32,7 +34,8 @@ class ActionPlan(AipRestCall):
         self._aip_data=aip_data
 
         #ef_name = abspath(f'{dirname(__file__)}/Effort.csv')
-        self.ef_name = abspath(f'{getsitepackages()[-1]}/cast_arg/Effort.csv')
+        # self.ef_name = abspath(f'{getsitepackages()[-1]}/cast_arg/Effort.csv')
+        self.ef_name = abspath(f'src/cast_arg/Effort.csv')
 
         if not exists(self.ef_name):
             raise RuntimeError(f'Required file not found: {self.ef_name}')
@@ -96,17 +99,30 @@ class ActionPlan(AipRestCall):
             ap_summary_df.loc[ap_summary_df['tag']=='extreme','RGB']='244,212,212'
             ap_summary_df.loc[ap_summary_df['tag']=='high','RGB']='255,229,194'
             ap_summary_df.loc[ap_summary_df['tag']=='moderate','RGB']='203,225,238'
-            ap_summary_df.loc[ap_summary_df['tag']=='low','RGB']='254,254,255'
+            ap_summary_df.loc[ap_summary_df['tag']=='low','RGB']='217,217,217'
 
             ap_table = pd.concat([ap_summary_df[ap_summary_df['tag']=='extreme'],
                                   ap_summary_df[ap_summary_df['tag']=='high'],
                                   ap_summary_df[ap_summary_df['tag']=='moderate'],
                                   ap_summary_df[ap_summary_df['tag']=='low']])
 
-            ap_table = ap_table.drop(columns=['comment','tag','Technical Criteria','Days Effort','Cost Est.','Eff Hours'])
+            ap_table = ap_table.drop(columns=['comment','Technical Criteria','Days Effort','Cost Est.','Eff Hours'])
+            
+
+            # All rows where tag == 'A'
+            starting_rows = ap_table[ap_table['tag'] == 'extreme']
+
+            # 6 rows for each of C, D, B
+            other_tags = ['high', 'moderate', 'low']
+            other_rows = ap_table[ap_table['tag'].isin(other_tags)].groupby('tag').head(5)
+
+            # Combine and reorder
+            ap_table = pd.concat([starting_rows] + [other_rows[other_rows['tag'] == tag] for tag in other_tags])
+
+            ap_table = ap_table.drop(columns=['tag'])
 
             try:
-                self._ppt.update_table(f'app{app_no}_action_plan',ap_table.head(29),app_id,include_index=False,background='RGB')
+                self._ppt.update_table(f'app{app_no}_action_plan',ap_table,app_id,include_index=False,background='RGB')
             except ValueError as ex:
                 self._log.warning('Action plan table missing from tamplate')
                 
