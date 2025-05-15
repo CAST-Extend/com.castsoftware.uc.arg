@@ -18,7 +18,7 @@ class CloudMaturity(HLPage):
             self.slide = self.ppt.get_slide(self.ppt.get_shape_by_name(f'{self.tag_prefix}_CloudTechPieChart'))
             metrics = self._get_metrics(app)
 
-            self.replace_text('CloudIndex',round(self._get_metrics(app)['cloudReady']*100,1),shape=True,slide=self.slide)
+            self.replace_text('CloudIndex', str(round(self._get_metrics(app)['cloudReady']*100,1)) + '%', shape=True,slide=self.slide)
 
             # get the cloud data from the Highlight REST API
             data = self.get_data(app)
@@ -28,8 +28,8 @@ class CloudMaturity(HLPage):
             #this slide has tags that are both text embedded and shape named
             for shape in [True,False]:
                 self.replace_text('cloud_total_roadblocks',int(metrics['roadblocks']),slide=self.slide,shape=shape)
-                self.replace_text('cloud_total_blockers',round(metrics['blockers']*100,1),slide=self.slide,shape=shape)
-                self.replace_text('cloud_total_boosters',round(metrics['boosters']*100,1),slide=self.slide,shape=shape)
+                self.replace_text('cloud_total_blockers', str(round(metrics['blockers']*100,1)) + '%' ,slide=self.slide,shape=shape)
+                self.replace_text('cloud_total_boosters', str(round(metrics['boosters']*100,1)) + '%' ,slide=self.slide,shape=shape)
 
 
             # self.ppt.replace_text(f'{{{self.tag_prefix}_hl_cloud_total_roadblocks}}',int(metrics['roadblocks']),slide=self.slide)

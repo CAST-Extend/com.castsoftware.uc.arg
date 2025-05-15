@@ -10,7 +10,9 @@ class MRIGrades(MRIPage):
 
     def report(self,app_name:str,app_no:int) -> bool:
 
+        high_or_medium_grade_list = []
         app_level_grades = self.get_app_grades(app_name)
+        # print(app_level_grades)
         for name, value in app_level_grades.T.items():
             # fill grades
             grade = round(value,2)
@@ -23,8 +25,12 @@ class MRIGrades(MRIPage):
             risk = ''
             if grade < 2:
                 risk = 'high'
+                if len(high_or_medium_grade_list) < 2 and (name in ['Robustness', 'Efficiency', 'Security', 'Changeability', 'Transferability']):
+                    high_or_medium_grade_list.append(name)
             elif grade < 3:
                 risk = 'medium'
+                if len(high_or_medium_grade_list) < 2 and (name in ['Robustness', 'Efficiency', 'Security', 'Changeability', 'Transferability']):
+                    high_or_medium_grade_list.append(name)
             else:
                 risk = 'low'
             self.ppt.replace_text(rpl_str,risk)
@@ -51,6 +57,12 @@ class MRIGrades(MRIPage):
                 if not slider is None:
                     self.ppt.update_grade_slider(slider,[grade])
         
+        if len(high_or_medium_grade_list) == 0:
+            self.ppt.replace_text(f'{{high_or_medium_grade}}', " ")
+        elif len(high_or_medium_grade_list) == 0:
+            self.ppt.replace_text(f'{{high_or_medium_grade}}', f", needs remediation to improve {high_or_medium_grade_list[0]}")
+        else:
+            self.ppt.replace_text(f'{{high_or_medium_grade}}', f", needs remediation to improve {high_or_medium_grade_list[0]} and {high_or_medium_grade_list[1]}")
         #calculate high and medium risk factors
         risk_grades = self.calc_health_grades_high_risk(app_level_grades)
         if risk_grades.empty:

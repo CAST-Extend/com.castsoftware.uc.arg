@@ -170,28 +170,34 @@ class AipData(AipRestCall):
 
     def _get_iso_rules(self,domain_id,snapshot_id):
         iso={1061004:"Security",
-             1061003:"Reliability",
-             1061002:"Performance-Efficiency",
-             1061001:"Maintainability",
+            1061003:"Reliability",
+            1061002:"Performance-Efficiency",
+            1061001:"Maintainability",
         }
 
         rslt_df = DataFrame()
         rslt_df.style.set_properties(subset=['text'],**{'text-align': 'left'})
         for key, value in iso.items():
             try:
-                temp = DataFrame(columns=['category','violation'])
-                rp = json_normalize(self.get_rules(domain_id,snapshot_id,key,return_raw=True)['rulePattern'])
-                temp['violation'] = rp['name']
-                temp['category'] = value
-                temp = temp.groupby(['category','violation']).size().reset_index(name='count') 
+                rp = json_normalize(self.get_rules(domain_id, snapshot_id, key, return_raw=True)['rulePattern'])
+                temp = DataFrame({
+                    'violation': rp['name'],
+                    'category': value
+                })
 
-                temp = temp.sort_values(['count'], ascending=[False]).head(3) 
+                # Get count of each violation
+                full_group = temp.groupby(['category', 'violation']).size().reset_index(name='count')
 
-                total = temp.groupby(['category'])['count'].sum().reset_index(name='count') 
-                total['violation']=''
-                total = total[['category','violation','count']]
+                # Sort and select top 3 violations
+                top3 = full_group.sort_values(['count'], ascending=[False]).groupby('category').head(3)
 
-                rslt_df = concat([rslt_df,total,temp])
+                # Calculate total from full group (not top3)
+                total = full_group.groupby('category')['count'].sum().reset_index(name='count')
+                total['violation'] = ''
+                total = total[['category', 'violation', 'count']]
+
+                # Append total first, then top 3
+                rslt_df = concat([rslt_df, total, top3])
             except KeyError as e:
                 self.warning(f'no iso rules for {value} ({e})')
 

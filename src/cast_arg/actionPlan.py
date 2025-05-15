@@ -80,6 +80,10 @@ class ActionPlan(AipRestCall):
             ap_summary_df['Days Effort'] = (ap_summary_df['Eff Hours'] * ap_summary_df['No. of Actions'])/8
             ap_summary_df['Cost Est.'] = ap_summary_df['Days Effort'] * self._day_rate
 
+            ap_summary_df = ap_summary_df.sort_values(by='No. of Actions', ascending=False)
+
+            # print(ap_summary_df)
+
             file_name = f'{self._output_folder}/{app_id}_action_plan.xlsx'
             writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
             col_widths=[50,40,10,10,10,50,10,10,10]

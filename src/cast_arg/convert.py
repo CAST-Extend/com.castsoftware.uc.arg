@@ -499,11 +499,30 @@ class GeneratePPT(Logger):
     def fill_critical_rules(self,app_id,app_no):
         self.info('Filling critical rules table')
         rules_df = self._aip_data.critical_rules(app_id)
+        # # Show all columns when printing
+        # pd.set_option('display.max_columns', None)
+        # pd.set_option('display.max_colwidth', None)
+        # print(rules_df.head(5))
         if not rules_df.empty:
             rules_df = rules_df[['rulePattern.name','rulePattern.critical']]
             rule_summary_df=rules_df.groupby(['rulePattern.name']).size().reset_index(name='counts').sort_values(by=['counts'],ascending=False)
             rule_summary_df=rule_summary_df.head(5)
             self._ppt.update_table(f'app{app_no}_top_violations',rule_summary_df,app_id,include_index=False)
+            top_rule_name = rule_summary_df['rulePattern.name'].iloc[0]
+            # print(rule_summary_df.head(5))
+            # print(top_rule_name)
+            (ap_df,ap_summary_df)=self._aip_data.action_plan(app_id)
+            # Fetch the Business Criteria based on the Quality Rule
+            business_criteria = ap_summary_df.loc[ap_summary_df['Quality Rule'] == top_rule_name, 'Business Criteria'].values
+
+            # If you want a single value (assuming one match), you can do:
+            if len(business_criteria) > 0:
+                business_criteria = business_criteria[0]
+            else:
+                business_criteria = None
+            
+            self._ppt.replace_text(f'{{business_criteria}}',business_criteria)
+
         else:
             self.warning('This application contains no critical violations')
 
@@ -555,7 +574,7 @@ class GeneratePPT(Logger):
             lic_summary['component']=lic_summary['component'].map(lambda x: no_dups(x,',',True))
             
             #only show the first 5 components
-            lic_summary['component']=lic_summary['component'].map(lambda x: x[:find_nth(x,',',6)])
+            lic_summary['component']=lic_summary['component'].map(lambda x: x[:find_nth(x, ',', 6)] if find_nth(x, ',', 6) != -1 else x)
             lic_summary=lic_summary[['license','risk','comp count','component']]
             lic_summary.sort_values(['risk','license','comp count'],inplace=True)
 

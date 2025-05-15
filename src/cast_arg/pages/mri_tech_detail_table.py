@@ -62,6 +62,8 @@ class TechDetailTable(MRIPage):
         loc_df = DataFrame(sizing_df['Number of Code Lines'])
 
         sizing_df['Number of Code Lines'] = sizing_df['Number of Code Lines'].map('{:,.0f}'.format)
+        sizing_df.drop('Critical Violations', axis=1, inplace=True)
+        # print(sizing_df)
         self.ppt.update_table(f'app{app_no}_technical_details_table',sizing_df,app_name,header_rows=2)
 
         # loc_df=loc_df.reset_index()

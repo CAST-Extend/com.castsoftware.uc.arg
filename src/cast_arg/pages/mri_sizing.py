@@ -31,6 +31,13 @@ class MRISizing(MRIPage):
             self.ppt.replace_text(f'{{app{app_no}_comment_pct}}',percent_comment)
             self.ppt.replace_text(f'{{app{app_no}_comment_out_pct}}',percent_comment_out)
 
+            if percent_comment_out <= 1:
+                self.ppt.replace_text(f'{{app{app_no}_comment_out_word}}', 'good')
+            elif percent_comment_out > 1 and percent_comment_out <= 2:
+                self.ppt.replace_text(f'{{app{app_no}_comment_out_word}}', 'quite significant')
+            else:
+                self.ppt.replace_text(f'{{app{app_no}_comment_out_word}}', 'significant')
+
             loc_tbl['percent']=Series(["{0:.2f}%".format(val) for val in loc_tbl['percent']], index = loc_tbl.index)
             self.ppt.update_table(f'app{app_no}_loc_table',loc_tbl,app_name,header_rows=0)
             self.ppt.update_chart(f'app{app_no}_loc_pie_chart',DataFrame(loc_tbl['loc']))
