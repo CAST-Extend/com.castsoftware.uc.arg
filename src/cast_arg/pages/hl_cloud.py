@@ -99,6 +99,8 @@ class CloudMaturity(HLPage):
 
     def create_excel(self,app_name:str,data:DataFrame,output:str):
         file_name = abspath(f'{output}/Cloud-Maturity-{app_name}.xlsx')
+        # Remove column 'Files'
+        data = data.drop('Files', axis=1)
         writer = ExcelWriter(file_name, engine='xlsxwriter')
         col_widths=[50,10,10,10,10,10,10]
         cloud_tab = format_table(writer,data,'Cloud Data',col_widths)

@@ -13,7 +13,7 @@ __copyright__ = "Copyright 2023, CAST Software"
 
 if __name__ == '__main__':
     # version = get_distribution('com.castsoftware.uc.arg').version
-    version = "1.7.7"
+    version = "1.7.9"
     
     print(f'\nCAST Assessment Deck Generation Tool (ARG), v{version}')
     # print(f'com.castsoftware.uc.python.common v{get_distribution("com.castsoftware.uc.python.common").version}')

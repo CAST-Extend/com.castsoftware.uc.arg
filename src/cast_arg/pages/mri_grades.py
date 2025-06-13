@@ -59,7 +59,7 @@ class MRIGrades(MRIPage):
         
         if len(high_or_medium_grade_list) == 0:
             self.ppt.replace_text(f'{{high_or_medium_grade}}', " ")
-        elif len(high_or_medium_grade_list) == 0:
+        elif len(high_or_medium_grade_list) == 1:
             self.ppt.replace_text(f'{{high_or_medium_grade}}', f", needs remediation to improve {high_or_medium_grade_list[0]}")
         else:
             self.ppt.replace_text(f'{{high_or_medium_grade}}', f", needs remediation to improve {high_or_medium_grade_list[0]} and {high_or_medium_grade_list[1]}")

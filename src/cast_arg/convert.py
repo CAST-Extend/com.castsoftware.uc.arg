@@ -513,10 +513,8 @@ class GeneratePPT(Logger):
             # print(top_rule_name)
             (ap_df,ap_summary_df)=self._aip_data.action_plan(app_id)
             # Fetch the Business Criteria based on the Quality Rule
-            business_criteria = ap_summary_df.loc[ap_summary_df['Quality Rule'] == top_rule_name, 'Business Criteria'].values
-
-            # If you want a single value (assuming one match), you can do:
-            if len(business_criteria) > 0:
+            if not ap_summary_df.empty:
+                business_criteria = ap_summary_df.loc[ap_summary_df['Quality Rule'] == top_rule_name, 'Business Criteria'].values
                 business_criteria = business_criteria[0]
             else:
                 business_criteria = None

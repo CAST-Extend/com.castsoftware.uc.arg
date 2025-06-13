@@ -110,7 +110,7 @@ class RestCall(Logger):
             self.error(e)
         except exceptions.RequestException as e:
             # catastrophic error. bail.
-            self.error(f'General Request exception while performing api request using: {u}')
+            self.error(f'General Request exception while performing api request using: {u}\n {e}')
 
         return 0, "{}"
     

@@ -87,8 +87,12 @@ class ActionPlan(AipRestCall):
             file_name = f'{self._output_folder}/{app_id}_action_plan.xlsx'
             writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
             col_widths=[50,40,10,10,10,50,10,10,10]
-            summary_tab = format_table(writer,ap_summary_df[['Quality Rule','Business Criteria','No. of Actions','comment']],'Summary',col_widths)
+            # Rename 'old_name' to 'new_name'
+            ap_summary_df.rename(columns={'comment': 'Priority'}, inplace=True)
+            summary_tab = format_table(writer,ap_summary_df[['Quality Rule','Business Criteria','No. of Actions','Priority']],'Summary',col_widths)
             col_widths=[10,50,50,30,30,30,30,30,30,30,30,30,30]
+            # Remove column 'Files'
+            ap_df = ap_df.drop('Rule Id', axis=1)
             format_table(writer,ap_df,'Action Plan',col_widths)
             writer.close()
 
@@ -110,7 +114,7 @@ class ActionPlan(AipRestCall):
                                   ap_summary_df[ap_summary_df['tag']=='moderate'],
                                   ap_summary_df[ap_summary_df['tag']=='low']])
 
-            ap_table = ap_table.drop(columns=['comment','Technical Criteria','Days Effort','Cost Est.','Eff Hours'])
+            ap_table = ap_table.drop(columns=['Priority','Technical Criteria','Days Effort','Cost Est.','Eff Hours'])
             
 
             # All rows where tag == 'A'
@@ -122,6 +126,27 @@ class ActionPlan(AipRestCall):
 
             # Combine and reorder
             ap_table = pd.concat([starting_rows] + [other_rows[other_rows['tag'] == tag] for tag in other_tags])
+
+            # print(ap_table)
+
+            top_indices = ap_table[ap_table["tag"] != "moderate"].groupby("tag")["No. of Actions"].idxmax()
+
+            # Store top 1 violations for other plans
+            top1_immediate_action = ap_table.loc[top_indices["extreme"]]
+            top1_near_term_action = ap_table.loc[top_indices["high"]]
+
+            # Get top 2 for Mid Term Action
+            mid_term_df = ap_table[ap_table["tag"] == "moderate"]
+            mid_term_action_top2 = mid_term_df.nlargest(2, "No. of Actions")
+
+            # Split top 2 into two separate variables
+            top1_mid_term_action = mid_term_action_top2.iloc[0]
+            top2_mid_term_action = mid_term_action_top2.iloc[1]
+
+            self._ppt.replace_text(f"{{top_1_immediate_action}}",str(top1_immediate_action['Quality Rule']))
+            self._ppt.replace_text(f"{{top_1_near_term_action}}",str(top1_near_term_action['Quality Rule']))
+            self._ppt.replace_text(f"{{top_1_mid_term_action}}",str(top1_mid_term_action['Quality Rule']))
+            self._ppt.replace_text(f"{{top_2_mid_term_action}}",str(top2_mid_term_action['Quality Rule']))
 
             ap_table = ap_table.drop(columns=['tag'])
 
