@@ -236,8 +236,10 @@ def each_risk_factor(ppt, aip_data, app_id, app_no):
     ppt.remove_empty_placeholders()
     return risk_grades
 
-def format_table(writer, data, sheet_name,width=None,total_line:bool=False):
-    
+def format_table(writer, data, sheet_name,width=None,total_line:bool=False,decimal_columns=None):
+    if decimal_columns is None:
+        decimal_columns = []
+
     data.to_excel(writer, index=False, sheet_name=sheet_name, startrow=1,header=False)
 
     workbook = writer.book
@@ -249,21 +251,24 @@ def format_table(writer, data, sheet_name,width=None,total_line:bool=False):
     columns=[]
 
     # Add a custom number format with commas to the workbook
-    comma_format = workbook.add_format({'num_format': '#,##0'})
+    comma_format = workbook.add_format({'num_format': '#,##0'})         # No decimals
+    decimal_format = workbook.add_format({'num_format': '#,##0.00'})    # With decimals
 
     first=True
     for col_num, value in enumerate(data.columns.values):
         json = {'header': value}
-        
-        # Check if the column is numeric and not boolean
+
         if is_numeric_dtype(data[value]) and data[value].dtype != 'bool':
-            json['format'] = comma_format
+            if value in decimal_columns:
+                json['format'] = decimal_format
+            else:
+                json['format'] = comma_format
 
         if first:
             first=False
             if total_line:
                 json['total_string']='Totals'
-        else: 
+        else:
             if is_numeric_dtype(data[value]) and data[value].dtype != 'bool':
                 if total_line:
                     json['total_function']='sum'
@@ -271,20 +276,20 @@ def format_table(writer, data, sheet_name,width=None,total_line:bool=False):
         columns.append(json)
 
     table_options={
-                'columns':columns,
-                'header_row':True,
-                'autofilter':True,
-                'banded_rows':True,
-                'total_row':total_line
-                }
+        'columns':columns,
+        'header_row':True,
+        'autofilter':True,
+        'banded_rows':True,
+        'total_row':total_line
+    }
 
     worksheet.add_table(0, 0, rows, cols,table_options)
-    
+
     header_format = workbook.add_format({'text_wrap':True,
                                         'align': 'center'})
 
     col_width = 10
-    if width == None:
+    if width is None:
         width = []
         for col in data.columns:
             x = data[col].astype(str).str.len().max()
@@ -294,12 +299,12 @@ def format_table(writer, data, sheet_name,width=None,total_line:bool=False):
 
         # for i in range(1,len(data.columns)+1):
         #    width.append(col_width)
-
-
     for col_num, value in enumerate(data.columns.values):
         worksheet.write(0, col_num, value, header_format)
-        w=width[col_num]
-        worksheet.set_column(col_num, col_num, w, comma_format if is_numeric_dtype(data[value]) and data[value].dtype != 'bool' else None)
+        col_format = None
+        if is_numeric_dtype(data[value]) and data[value].dtype != 'bool':
+            col_format = decimal_format if value in decimal_columns else comma_format
+        worksheet.set_column(col_num, col_num, width[col_num], col_format)
         
     return worksheet
 

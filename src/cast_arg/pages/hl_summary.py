@@ -200,7 +200,9 @@ class HighlightSummary(HLPage):
         total_files = int(tech_df['totalFiles'].sum())
         self.replace_text('total_files',f'{total_files:,}')
         self.replace_text('oss_total_components',f'{comp_total:,}')
-        # self.replace_text('oss_total_licenses',f'{t_license:,}')
+        # print(oss_data)
+        t_license = oss_data['license']['total']
+        self.replace_text('oss_total_licenses',f'{t_license:,}')
 
         # if oss_cve_df.empty:
         #     oss_crit_vio_total = 0

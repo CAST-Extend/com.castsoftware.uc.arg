@@ -103,7 +103,7 @@ class GreenIt(HLPage):
     def create_excel(self,app_name:str,data:DataFrame,output:str):
         file_name = abspath(f'{output}/greenIt-Reporting-{app_name}.xlsx')
         writer = ExcelWriter(file_name, engine='xlsxwriter')
-        format_table(writer,data,'Detail',width=[75,25,15,15,15],total_line=True)
+        format_table(writer,data,'Detail',width=[75,25,15,15,15],total_line=True,decimal_columns=['Effort'])
         writer.close()
 
 
