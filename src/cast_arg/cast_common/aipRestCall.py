@@ -96,7 +96,7 @@ class AipRestCall(MRI):
         snapshot = {}
         (status,json) = self._get_snapshot(domain_id)
         if status == codes.ok and len(json) > 0:
-            snapshot = self._capture_snapshot(json)
+            snapshot = self._capture_snapshot(json[0])
         return snapshot 
 
     def get_prev_snapshot(self,domain_id):
@@ -104,19 +104,19 @@ class AipRestCall(MRI):
         snapshot = {}
         (status,json) = self._get_snapshot(domain_id)
         if status == codes.ok and len(json) > 1:
-            snapshot = self._capture_snapshot(json)
+            snapshot = self._capture_snapshot(json[1])
         return snapshot  
 
     def _capture_snapshot(self,json:dict) -> dict:
         snapshot = {}
-        snapshot['id'] = json[0]['href'].split('/')[-1]  
-        snapshot['name'] = json[0]['name']
-        snapshot['technology'] = json[0]['technologies']
-        snapshot['module_href'] = json[0]['moduleSnapshots']['href']
-        snapshot['result_href'] = json[0]['results']['href']
-        snapshot['date'] = json[0]['annotation']['date']['isoDate'] 
+        snapshot['id'] = json['href'].split('/')[-1]  
+        snapshot['name'] = json['name']
+        snapshot['technology'] = json['technologies']
+        snapshot['module_href'] = json['moduleSnapshots']['href']
+        snapshot['result_href'] = json['results']['href']
+        snapshot['date'] = json['annotation']['date']['isoDate']
 
-        snapshot['tech-key'] = json[0]['technologies']
+        snapshot['tech-key'] = json['technologies']
         snapshot['technology'] = [sub.replace('.NET','DotNet') for sub in snapshot['technology']]
 
         return snapshot
@@ -348,6 +348,14 @@ class AipRestCall(MRI):
             (status,json) = self.get(f'{domain_id}/applications/3/results?sizing-measures={key}&snapshots=-1')
             if status == codes.ok and len(json) > 0:
                 rslt[input[key]]=json[0]['applicationResults'][0]['result']['value']
+        return rslt
+    
+    def get_prev_sizing(self, domain_id, input):
+        rslt = {}
+        for key in input: 
+            (status,json) = self.get(f'{domain_id}/applications/3/results?sizing-measures={key}&snapshots=-2')
+            if status == codes.ok and len(json) > 0:
+                rslt[input[key]]=json[1]['applicationResults'][0]['result']['value']
         return rslt
 
     def get_violation_CR(self,domain_id):

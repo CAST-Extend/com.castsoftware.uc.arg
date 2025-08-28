@@ -5,6 +5,8 @@ from cast_common.util import format_table,list_to_text
 from pandas import Series
 from pptx.dml.color import RGBColor
 
+from config import Config
+
 class MRIGrades(MRIPage):
     description = 'Calculating MRI Grades'
 
@@ -12,12 +14,51 @@ class MRIGrades(MRIPage):
 
         high_or_medium_grade_list = []
         app_level_grades = self.get_app_grades(app_name)
-        # print(app_level_grades)
+
+        prev_app_level_grades = self.get_prev_app_grades(app_name)
+
+        # Align both series (in case of mismatched order/index)
+        app_level_grades, prev_app_level_grades = app_level_grades.align(prev_app_level_grades)
+
+        # Calculate difference
+        diff = app_level_grades - prev_app_level_grades
+
+        # Format as requested: current_value(diff)
+        formatted_diff = app_level_grades.map(lambda val: f"{val:.2f}") + \
+            diff.map(lambda d: f"({'+' if d >= 0 else ''}{d:.2f})")
+        
+        # print(formatted_diff)
+
         for name, value in app_level_grades.T.items():
             # fill grades
             grade = round(value,2)
             rpl_str = f'{{app{app_no}_grade_{name}}}'
-            self.ppt.replace_text(rpl_str,grade)
+            if rpl_str.endswith('Changeability}'):
+                self.ppt.replace_text(rpl_str,str(formatted_diff['Changeability']))
+            elif rpl_str.endswith('Documentation}'):
+                self.ppt.replace_text(rpl_str,str(formatted_diff['Documentation']))
+            elif rpl_str.endswith('Efficiency}'):
+                self.ppt.replace_text(rpl_str,str(formatted_diff['Efficiency']))
+            elif rpl_str.endswith('ISO}'):
+                self.ppt.replace_text(rpl_str,str(formatted_diff['ISO']))
+            elif rpl_str.endswith('ISO_EFF}'):
+                self.ppt.replace_text(rpl_str,str(formatted_diff['ISO_EFF']))
+            elif rpl_str.endswith('ISO_MAINT}'):
+                self.ppt.replace_text(rpl_str,str(formatted_diff['ISO_MAINT']))
+            elif rpl_str.endswith('ISO_REL}'):
+                self.ppt.replace_text(rpl_str,str(formatted_diff['ISO_REL']))
+            elif rpl_str.endswith('ISO_SEC}'):
+                self.ppt.replace_text(rpl_str,str(formatted_diff['ISO_SEC']))
+            elif rpl_str.endswith('Robustness}'):
+                self.ppt.replace_text(rpl_str,str(formatted_diff['Robustness']))
+            elif rpl_str.endswith('Security}'):
+                self.ppt.replace_text(rpl_str,str(formatted_diff['Security']))
+            elif rpl_str.endswith('TQI}'):
+                self.ppt.replace_text(rpl_str,str(formatted_diff['TQI']))
+            elif rpl_str.endswith('Transferability}'):
+                self.ppt.replace_text(rpl_str,str(formatted_diff['Transferability']))
+            else:
+                self.ppt.replace_text(rpl_str,str(grade))
             self._log.debug(f'replaced {rpl_str} with {grade}')
 
             # fill grade risk factor (high, medium or low)

@@ -121,6 +121,10 @@ class Config():
     @property
     def company(self):
         return self._config['company']
+    
+    @property
+    def delta_report(self):
+        return self._config['delta_report']
 
     @property
     def template(self):

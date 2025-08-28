@@ -216,9 +216,15 @@ class GeneratePPT(Logger):
         # replace AIP data global to all applications
         if self._config.aip_active:
             all_apps_avg_grade = self._aip_data.calc_grades_all_apps()
+            # print(f'All Apps Average Grade:\n {all_apps_avg_grade}')
+            prev_all_apps_avg_grade = self._aip_data.calc_prev_grades_all_apps()
+            # print(f'Previous All Apps Average Grade:\n {prev_all_apps_avg_grade}')
 #            self._ppt.replace_text("{all_apps}",self._aip_data.get_all_app_text())
             self._ppt.replace_risk_factor(all_apps_avg_grade,search_str="{summary_")
             risk_grades = self._aip_data.calc_health_grades_high_risk(all_apps_avg_grade)
+            # print(f'All Apps High Risk Grades:\n {risk_grades}')
+            prev_risk_grades = self._aip_data.calc_prev_health_grades_high_risk(prev_all_apps_avg_grade)
+            # print(f'Previous All Apps High Risk Grades:\n {prev_risk_grades}')
             if risk_grades.empty:
                 risk_grades = self._aip_data.calc_health_grades_medium_risk(all_apps_avg_grade)
             self._ppt.replace_text("{summary_at_risk_factors}",list_to_text(risk_grades.index.tolist()).lower())

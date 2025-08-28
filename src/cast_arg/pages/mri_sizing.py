@@ -1,15 +1,22 @@
 from pages.mri_report import MRIPage
 from powerpoint import PowerPoint
 from pandas import DataFrame,Series
+from config import Config
 
 class MRISizing(MRIPage):
     description = 'Calculating MRI Sizing'
 
     def report(self,app_name:str,app_no:int) -> bool:
         loc_df = self.get_loc_sizing(app_name)
+        prev_loc_df = self.get_prev_loc_sizing(app_name)
         if len(loc_df) > 0:
             loc = loc_df['Number of Code Lines']
-            self._ppt.replace_loc(loc,app_no)
+            if Config.delta_report:
+                prev_loc = prev_loc_df['Number of Code Lines']
+                diffloc = loc - prev_loc
+                self._ppt.replace_loc(loc,app_no,int(diffloc))
+            else:
+                self._ppt.replace_loc(loc,app_no)
 
             loc_tbl = DataFrame.from_dict(data=self.get_loc_sizing(app_name),orient='index').drop('Critical Violations')
             loc_tbl = loc_tbl.rename(columns={0:'loc'})

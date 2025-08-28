@@ -58,6 +58,7 @@ class AipData(AipRestCall):
     def __init__(self, config:dict=None,output:str=None,timer_on=False,log_level=INFO):
         if AipData._data is None:
             AipData._data={}
+            AipData._prev_data={}
             super().__init__(base_url=config.aip_url, user=config.aip_user, pswd=config.aip_password, 
                              token=config.aip_token, track_time=timer_on,log_level=log_level)
             
@@ -68,6 +69,8 @@ class AipData(AipRestCall):
                 self.info(f'*******Collecting AIP data for {s}********')
                 AipData._data[s]={}
                 AipData._data[s]['has data'] = False
+                AipData._prev_data[s]={}
+                AipData._prev_data[s]['has data'] = False
     #            central_schema = f'{s}_central'.replace('-','_')
                 domain_id = self.get_domain(s)
                 if domain_id == -1:
@@ -124,21 +127,74 @@ class AipData(AipRestCall):
 
                         # self.info('Green IT Index')
                         # AipData._data[s]['GreenIT']=self._get_green_rules(domain_id,snapshot['id'])
+                        self.info('AIP data retrieval complete for current snapshot')
+                    
+                    if config.delta_report==True:
+                        self.info('Retrieving previous snapshot data')
+                        prev_snapshot = self.get_prev_snapshot(domain_id)
+                        if prev_snapshot:
+                            self.info('Delta report is active')
+                            AipData._prev_data[s]['has data'] = True
+                            AipData._prev_data[s]['snapshot']=prev_snapshot
 
+                            self.info('action plan data')
+                            (ap_df,ap_summary_df) = self.get_action_plan(domain_id,AipData._prev_data[s]['snapshot']['id']) 
+                            AipData._prev_data[s]['action_plan']=ap_df
+                            AipData._prev_data[s]['action_plan_summary']=ap_summary_df
 
+                            self.info('TQI compliance data')
+                            AipData._prev_data[s]['tqi_compliance']=self.aggregate_violation_ratio(domain_id,prev_snapshot['id'],'60017',self._imp_list)
 
-                        self.info('AIP data retrieval complete')
+                            self.info('documentation compliance data')
+                            AipData._prev_data[s]['doc_compliance']=self.aggregate_violation_ratio(domain_id,prev_snapshot['id'],'66033',self._doc_list,False)
+
+                            self.info('Grades by technology')
+                            AipData._prev_data[s]['grades']=self.get_grades_by_technology(domain_id,AipData._prev_data[s]['snapshot'])
+
+                            self.info('Sizing by technical')
+                            AipData._prev_data[s]['sizing']=self.get_sizing_by_technology(domain_id,AipData._prev_data[s]['snapshot'],self._sizing)
+
+                            self.info('LOC data')
+                            AipData._prev_data[s]['loc_sizing']=self.get_prev_sizing(domain_id,self._sizing)
+
+                            self.info('Technical sizing data')
+                            AipData._prev_data[s]['tech_sizing']=self.get_prev_sizing(domain_id,self._tech_sizing) 
+
+                            self.info('Violation sizing data')
+                            AipData._prev_data[s]['violation_sizing']=self.get_violation_CR(domain_id)
+
+                            self.info('Critical rules')
+                            AipData._prev_data[s]['critical_rules']=self.get_rules(domain_id,AipData._prev_data[s]['snapshot']['id'],60017,non_critical=False)
+
+                            self.info('ISO rules')
+                            AipData._prev_data[s]['ISO']=self._get_iso_rules(domain_id,prev_snapshot['id'])
+
+                            # self.info('Green IT Index')
+                            # AipData._prev_data[s]['GreenIT']=self._get_green_rules(domain_id,snapshot['id'])
+                            self.info('AIP data retrieval complete for previous snapshot')
+                        else:
+                            self.warning(f'No previous snapshot found for {s}')
+
                 else:
                     self.logger.warn(f'Domain not found for {s}')
 
     def has_data(self, app):
         return AipData._data[app]['has data']
+    
+    def has_prev_data(self, app):
+        return AipData._prev_data[app]['has data']
 
     def data(self,app):
         return AipData._data[app]
+    
+    def prev_data(self,app):
+        return AipData._prev_data[app]
 
     def iso_rules(self, app):
         return AipData._data[app]['ISO']
+    
+    def prev_iso_rules(self, app):
+        return AipData._prev_data[app]['ISO']
 
     def _get_green_it_rules(self,domain_id,snapshot_id):
         iso={20140522:"Green IT Index"}
@@ -210,24 +266,45 @@ class AipData(AipRestCall):
 
     def domain(self, app):
         return self.data(app)['domain_id']
+    
+    def prev_domain(self, app):
+        return self.prev_data(app)['domain_id']
 
     def snapshot(self, app):
         return self.data(app)['snapshot']
+    
+    def prev_snapshot(self, app):
+        return self.prev_data(app)['snapshot']
 
     def grades(self, app):
         return self.data(app)['grades']
+    
+    def prev_grades(self, app):
+        return self.prev_data(app)['grades']
 
     def sizing(self, app):
         return self.data(app)['sizing']
+    
+    def prev_sizing(self, app):
+        return self.prev_data(app)['sizing']
 
     def critical_rules(self, app):
         return self.data(app)['critical_rules']
+    
+    def prev_critical_rules(self, app):
+        return self.prev_data(app)['critical_rules']
 
     def tqi_compliance(self, app):
         return self.data(app)['tqi_compliance']
+    
+    def prev_tqi_compliance(self, app):
+        return self.prev_data(app)['tqi_compliance']
 
     def doc_compliance(self, app):
         return self.data(app)['doc_compliance']
+    
+    def prev_doc_compliance(self, app):
+        return self.prev_data(app)['doc_compliance']
 
     def aggregate_violation_ratio(self,domain_id, snapshot_id,key,sub_keys,crit_only=True):
         self.debug(f'aggregating violation ration information for {domain_id}{snapshot_id}')
@@ -312,9 +389,21 @@ class AipData(AipRestCall):
         ap_df = self.data(app)['action_plan']
         ap_summary_df = self.data(app)['action_plan_summary']
         return (ap_df,ap_summary_df)
+    
+    def prev_action_plan(self, app):
+        ap_df = self.prev_data(app)['action_plan']
+        ap_summary_df = self.prev_data(app)['action_plan_summary']
+        return (ap_df,ap_summary_df)
         
     def get_app_grades(self, app, sort=False):
         app_grades = self.grades(app).loc['All']
+        if sort:
+            return app_grades
+        else:
+            return app_grades.sort_values()
+        
+    def get_prev_app_grades(self, app, sort=False):
+        app_grades = self.prev_grades(app).loc['All']
         if sort:
             return app_grades
         else:
@@ -328,8 +417,22 @@ class AipData(AipRestCall):
                 grades=self.grades(row)
                 all_app = concat([all_app,grades[grades.index.isin(['All'])].rename(index={'All': app_name})]).drop_duplicates()
         return all_app[all_app.columns].mean(axis=0)
+    
+    def calc_prev_grades_all_apps(self):
+        all_app=DataFrame()
+        for row in AipData._prev_data:
+            if self.has_prev_data(row):
+                app_name=self.prev_snapshot(row)['name']
+                grades=self.prev_grades(row)
+                all_app = concat([all_app,grades[grades.index.isin(['All'])].rename(index={'All': app_name})]).drop_duplicates()
+        return all_app[all_app.columns].mean(axis=0)
 
     def calc_grades_health(self,grade_all):
+        grade_df = DataFrame(grade_all)
+        grade_health=grade_df[grade_df.index.isin(self._health_grade_ids)]
+        return grade_health
+    
+    def calc_prev_grades_health(self,grade_all):
         grade_df = DataFrame(grade_all)
         grade_health=grade_df[grade_df.index.isin(self._health_grade_ids)]
         return grade_health
@@ -338,21 +441,41 @@ class AipData(AipRestCall):
         grade_health = self.calc_grades_health(grade_all)
         grade_at_risk=grade_health[grade_health < 2].dropna()
         return grade_at_risk
+    
+    def calc_prev_health_grades_high_risk(self,grade_all):
+        grade_health = self.calc_prev_grades_health(grade_all)
+        grade_at_risk=grade_health[grade_health < 2].dropna()
+        return grade_at_risk
 
     def calc_health_grades_medium_risk(self,grade_all):
         grade_health = self.calc_grades_health(grade_all)
         grade_at_risk=grade_health[grade_health > 2].dropna()
         grade_at_risk=grade_health[grade_health < 3].dropna()
         return grade_at_risk
+    
+    def calc_prev_health_grades_medium_risk(self,grade_all):
+        grade_health = self.calc_prev_grades_health(grade_all)
+        grade_at_risk=grade_health[grade_health > 2].dropna()
+        grade_at_risk=grade_health[grade_health < 3].dropna()
+        return grade_at_risk
 
     def get_loc_sizing(self,app):
         return self.data(app)['loc_sizing']
+    
+    def get_prev_loc_sizing(self,app):
+        return self.prev_data(app)['loc_sizing']
 
     def tech_sizing(self, app):
         return self.data(app)['tech_sizing']
+    
+    def prev_tech_sizing(self, app):
+        return self.prev_data(app)['tech_sizing']
 
     def violation_sizing(self, app):
         return self.data(app)['violation_sizing']
+    
+    def prev_violation_sizing(self, app):
+        return self.prev_data(app)['violation_sizing']
 
     def get_all_app_text(self):
         rslt = ""
@@ -372,6 +495,26 @@ class AipData(AipRestCall):
                     rslt = rslt + ", "
             else:
                 rslt = "NO SNAPSHOT INFORMATION AVAILABLE"
+        return rslt
+
+    def get_prev_all_app_text(self):
+        rslt = ""
+
+        data = AipData._prev_data
+        l = len(self._base)
+        if l == 1:
+            return self.prev_snapshot(self._base[0])['name']
+
+        last_name = self._base[-2]
+        for a in self._base:
+            if self.has_prev_data(a):
+                rslt = rslt + self.prev_snapshot(a)['name']
+                if l >= 2 and a == last_name:
+                    rslt = rslt + " and "
+                elif a != self._base[-1]:
+                    rslt = rslt + ", "
+            else:
+                rslt = "NO PREVIOUS SNAPSHOT INFORMATION AVAILABLE"
         return rslt
 
     def get_grade_by_tech(self,app):
@@ -399,6 +542,26 @@ class AipData(AipRestCall):
         
         return tech
 
+    def get_prev_grade_by_tech(self,app):
+        grade_df = self.prev_grades(app).round(2).map('{:,.2f}'.format)
+        grade_df = self.prev_grades(app).round(2)
+        grade_df = grade_df[grade_df.index.isin(['All'])==False]
+
+        sizing_df = DataFrame(self.prev_sizing(app))
+        sizing_df = sizing_df[sizing_df.index.isin(['All'])==False]
+        sizing_df = DataFrame(sizing_df["Number of Code Lines"].rename("LOC")).dropna()
+        sizing_df.sort_values(by=['LOC'], ascending=False,inplace=True)
+        sizing_df = sizing_df.map('{:,.0f}'.format)
+
+        tech = sizing_df.join(grade_df) 
+
+        sizing_df = DataFrame(self.prev_sizing(app)) 
+        sizing_df = sizing_df[sizing_df.index.isin(['All'])==False]
+        sizing_df = DataFrame(sizing_df["Critical Violations"]).dropna()
+        sizing_df = sizing_df.map('{:,.0f}'.format)
+
+        tech = tech.join(sizing_df)
+
     def get_high_risk_grade_text(self, grades):
         grade_at_risk=self.calc_health_grades_high_risk(grades)
         if grade_at_risk.empty:
@@ -406,8 +569,22 @@ class AipData(AipRestCall):
         else:
             return self.text_from_list(grade_at_risk.index.values.tolist())
 
+    def get_prev_high_risk_grade_text(self, grades):
+        grade_at_risk=self.calc_prev_health_grades_high_risk(grades)
+        if grade_at_risk.empty:
+            return None
+        else:
+            return self.text_from_list(grade_at_risk.index.values.tolist())
+
     def get_medium_risk_grade_text(self, grades):
         grade_at_risk=self.calc_health_grades_medium_risk(grades)
+        if grade_at_risk.empty:
+            return None
+        else:
+            return self.text_from_list(grade_at_risk.index.values.tolist())
+
+    def get_prev_medium_risk_grade_text(self, grades):
+        grade_at_risk=self.calc_prev_health_grades_medium_risk(grades)
         if grade_at_risk.empty:
             return None
         else:

@@ -189,13 +189,17 @@ class PowerPoint(common_ppt):
                     sp = placeholder._sp
                     sp.getparent().remove(sp)
 
-    def replace_loc(self, loc, app_no):
+    def replace_loc(self, loc, app_no, diff_loc=None):
         loc_short = "{0:,.0f} LoC".format(loc) 
         if loc > 1000000:
             loc_short = "~{0:,.2f} MLoC".format(loc/1000000) 
         elif loc < 1000000 and loc > 1000:
-            loc_short = "~{0:,.0f} KLoC".format(loc/1000) 
-        self.replace_text(f'{{app{app_no}_loc}}',f'{loc:,.0f}')
+            loc_short = "~{0:,.0f} KLoC".format(loc/1000)
+        if Config.delta_report and diff_loc is not None: 
+            diff_loc = f'{loc:,.0f}' + '\n('+ str(diff_loc) + ')'
+            self.replace_text(f'{{app{app_no}_loc}}', diff_loc)
+        else:
+            self.replace_text(f'{{app{app_no}_loc}}',f'{loc:,.0f}')
         self.replace_text(f'{{app{app_no}_loc_short}}',loc_short)
 
         size_catagory = 'small'
